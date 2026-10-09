@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Trophy Maker — design a 3D-printable trophy STL</title>
+  <meta name="description" content="Mix and match bases, columns, toppers and plaques, add your own text, fonts and STL files, weld on ornate details and download a clean, watertight trophy STL.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%8F%86%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.js" } }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h14v8a7 7 0 0 1-14 0V4z"/><path d="M9 7H4v2a5 5 0 0 0 5 5M23 7h5v2a5 5 0 0 1-5 5"/><path d="M16 19v5M11.500 28h9M12.500 24h7"/></svg>
+      <span class="brand-name">Trophy Maker</span><span class="brand-sub">STL builder</span>
+    </div>
+    <div class="top-actions">
+      <button id="btnRandom" class="ghost" title="Roll a random combination">🎲 <span>Surprise me</span></button>
+      <button id="btnExport" class="primary">⬇ <span>Download STL</span></button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section id="stage" class="stage">
+      <canvas id="view"></canvas>
+      <div id="toasts" class="toasts" aria-live="polite"></div>
+      <div class="viewbar" id="viewbar">
+        <button data-view="iso" class="on">3D</button><button data-view="front">Front</button><button data-view="side">Side</button><button data-view="back">Back</button><button data-view="top">Top</button>
+        <span class="sep"></span>
+        <button id="vSpin" title="Turntable">⟳</button>
+        <button id="vBed" class="on" title="Show print bed">▦</button>
+        <button id="vWire" title="Wireframe">⌗</button>
+      </div>
+      <div class="matbar" id="matbar"></div>
+      <div class="statusbar" id="status"><span class="spinner" id="spinner"></span><span id="statusText">Loading geometry engine…</span></div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="tabbody" id="tabBody"></div>
+    </aside>
+  </main>
+
+  <input type="file" id="fileStl" accept=".stl,model/stl" hidden>
+  <input type="file" id="fileFont" accept=".ttf,.otf,.woff" hidden>
+  <input type="file" id="fileDesign" accept=".json,application/json" hidden>
+
+  <noscript>Trophy Maker needs JavaScript and WebAssembly.</noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
