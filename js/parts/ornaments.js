@@ -66,12 +66,24 @@ export function edgePoints(poly0, spacing, inset = 0) {
 }
 export function cornerPoints(poly0, inset) {
   const poly = ccw(poly0);
-  const pts = edgePoints(poly, 1e9, inset); // spacing huge => only corners (or one point if smooth)
+  const pts = edgePoints(poly, 1e9, inset); // spacing huge => only corners (or one point if the outline is smooth)
   if (pts.length >= 3) return pts.map((q) => q.p);
-  // smooth outline (round): four diagonal points
-  const b = poly.reduce((a, p) => [Math.max(a[0], Math.abs(p[0])), Math.max(a[1], Math.abs(p[1]))], [0, 0]);
-  const k = Math.SQRT1_2;
-  return [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sy]) => [sx * (b[0] - inset) * k, sy * (b[1] - inset) * k]);
+  // smooth outline (circle, oval, rounded square): ray-cast the four diagonals against the outline
+  const out = [];
+  for (const [sx, sy] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
+    const d = [sx * Math.SQRT1_2, sy * Math.SQRT1_2];
+    let best = Infinity;
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      const ex = q[0] - p[0], ey = q[1] - p[1];
+      const den = d[0] * ey - d[1] * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      const t = (p[0] * ey - p[1] * ex) / den, u = (p[0] * d[1] - p[1] * d[0]) / den;
+      if (t > 0 && u >= -1e-9 && u <= 1 + 1e-9) best = Math.min(best, t);
+    }
+    if (isFinite(best)) out.push([d[0] * (best - inset), d[1] * (best - inset)]);
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ finials */
@@ -133,23 +145,28 @@ export function decorateBase(base, o) {
 }
 
 /* ------------------------------------------------------------------ column ornaments */
-export function decorateColumn(col, o, zTop) {
+export function decorateColumn(col, o) {
   if (!o || !col) return col;
   const parts = [col.solid];
-  const r = col.topR / 0.8;
+  const rAt = col.radiusAt || (() => col.topR * 0.9);
+  const H = col.height;
+  const minR = (z0, z1) => { let m = Infinity; for (let i = 0; i <= 8; i++) m = Math.min(m, rAt(z0 + ((z1 - z0) * i) / 8)); return m; };
+  const maxR = (z0, z1) => { let m = 0; for (let i = 0; i <= 8; i++) m = Math.max(m, rAt(z0 + ((z1 - z0) * i) / 8)); return m; };
   if (o.collars) {
-    const h = Math.min(7, col.height * 0.12);
-    const ring = (z) => lathe([[r * 0.9, z], [r * 1.38, z + h * 0.25], [r * 1.42, z + h * 0.5], [r * 1.38, z + h * 0.75], [r * 0.9, z + h]], segs(r, 32), 0, false);
-    parts.push(ring(col.height * 0.04), ring(col.height - h - col.height * 0.04));
+    const h = Math.min(7, H * 0.12);
+    const ring = (z) => {
+      const rin = minR(z, z + h) * 0.8, rout = Math.max(maxR(z, z + h) * 1.18, minR(z, z + h) * 1.45);
+      return lathe([[rin, z], [rout * 0.93, z + h * 0.25], [rout, z + h * 0.5], [rout * 0.93, z + h * 0.75], [rin, z + h]], segs(rout, 32), 0, false);
+    };
+    parts.push(ring(H * 0.04), ring(H - h - H * 0.04));
   }
   if (o.leaves) {
-    const len = Math.min(col.height * 0.4, r * 3.2);
+    const len = Math.min(H * 0.4, rAt(0.2 * H) * 3.2);
+    const r = Math.min(rAt(len * 0.15), rAt(len * 0.5)) * 0.9; // inside the shaft where the leaves start
     const n = Math.max(8, Math.round((r * 2 * Math.PI) / 5));
-    const leaf = (L, tilt, w) => ellipsoid(w / 2, L * 0.07, L / 2, [0, 0, L / 2], 14)
-      .rotate([0, tilt, 0]);
-    for (const [k, L, tilt, off] of [[1, len, 32, 0], [0.8, len * 0.72, 12, 0.5]]) {
-      parts.push(...polarArray(n, (i, a) => leaf(L, tilt, (2 * Math.PI * r) / n * 1.05)
-        .translate([r * 0.82, 0, 0]).rotate([0, 0, a + off * (360 / n)])));
+    const leaf = (L, tilt, w) => ellipsoid(w / 2, L * 0.07, L / 2, [0, 0, L / 2], 14).rotate([0, tilt, 0]);
+    for (const [L, tilt, off] of [[len, 32, 0], [len * 0.72, 12, 0.5]]) {
+      parts.push(...polarArray(n, (i, a) => leaf(L, tilt, (2 * Math.PI * r) / n * 1.05).translate([r * 0.92, 0, 0]).rotate([0, 0, a + off * (360 / n)])));
     }
   }
   return { ...col, solid: union(parts) };
@@ -162,34 +179,50 @@ export function decorateTopper(solid, size, o) {
   const b = bounds(solid);
   const zc = b.min[2] + (b.max[2] - b.min[2]) * (o.wingHeight ?? 0.5);
   const dy = Math.max(size * 0.1, (b.size[1] / 2) + size * 0.05);
+  const z0 = size * 0.016; // foot level
+  let tied = false;
+  const tieToFoot = (r) => { if (!tied) { tied = true; parts.push(tube([[0, 0, z0], [0, dy, z0]], r, 8)); } };
   if (o.wings) {
     const span = size * (o.wingSize ?? 0.4);
     const wings = wingPair(span, 0, 1.2);
     parts.push(wings.translate([0, dy, zc]));
-    parts.push(cyl(dy + 1, size * 0.03, size * 0.03, [0, 0, 0], 16).rotate([-90, 0, 0]).translate([0, 0, zc]));
+    // the wings ride on a slim rear spine that is tied back to the topper's foot
+    parts.push(tube([[0, dy, zc], [0, dy, z0]], size * 0.014, 8));
+    tieToFoot(size * 0.016);
   }
   if (o.halo) {
     const Rr = Math.max(b.size[0], b.size[2] * 0.55) * 0.5 + size * (o.haloSize ?? 0.3);
+    const tr = size * 0.013; // the arch stands on a low cross-bar that is tied to the topper's foot
     const pts = [];
-    for (let i = 0; i <= 28; i++) { const a = rad(i * (180 / 28)); pts.push([Math.cos(a) * Rr, dy, Math.sin(a) * Rr]); }
-    parts.push(tube(pts, size * 0.012, 8));
+    for (let i = 0; i <= 28; i++) { const a = rad(i * (180 / 28)); pts.push([Math.cos(a) * Rr, dy, Math.sin(a) * Rr + z0]); }
+    parts.push(tube(pts, tr, 8));
+    parts.push(tube([[-Rr, dy, z0], [Rr, dy, z0]], tr, 8)); // cross-bar
+    tieToFoot(tr * 1.2);
     const ns = o.haloStars || 7;
     for (let i = 0; i < ns; i++) {
       const a = rad(12 + (156 * i) / (ns - 1));
       const R = size * 0.045;
       const star = bevelSolid(polys([starPoly(5, R, R * 0.45)]), R * 0.55, 0.35, 0.2).rotate([90, 0, 0]);
-      parts.push(star.translate([Math.cos(a) * Rr, dy, Math.sin(a) * Rr]));
+      parts.push(star.translate([Math.cos(a) * Rr, dy, Math.sin(a) * Rr + z0]));
     }
-    parts.push(cyl(Rr * 0.04 + 1, size * 0.012, size * 0.012, [0, 0, 0], 8).translate([Rr, dy - 0.5, -1]));
-    parts.push(box(size * 0.025, size * 0.025, size * 0.03 + 1, [Rr, dy, -1]), box(size * 0.025, size * 0.025, size * 0.03 + 1, [-Rr, dy, -1]));
   }
   return union(parts);
 }
 
 /* ------------------------------------------------------------------ plaque ornaments (flat frame: z outward) */
-function scroll(side, v, w, h, t) {
+/** x of the outline's right-hand edge at height y (so ornaments attach to the real edge, not the bounding box) */
+function edgeX(contours, y, fallback) {
+  let best = -Infinity;
+  for (const c of contours) for (let i = 0; i < c.length; i++) {
+    const [x0, y0] = c[i], [x1, y1] = c[(i + 1) % c.length];
+    if ((y0 <= y && y < y1) || (y1 <= y && y < y0)) best = Math.max(best, x0 + ((y - y0) * (x1 - x0)) / (y1 - y0));
+  }
+  return isFinite(best) ? best : fallback;
+}
+function scroll(side, v, w, h, t, contours) {
   const Ro = h * 0.42;
-  const Sx = w / 2 - 1, Sy = v * h * 0.1;
+  const Sy = v * h * 0.1;
+  const Sx = edgeX(contours, Sy, w / 2) - 1.2;
   const cx = Sx + Ro * 1.0, cy = Sy + v * Ro * 0.55;
   const th0 = Math.atan2(Sy - cy, Sx - cx);
   const r0 = Math.hypot(Sx - cx, Sy - cy);
@@ -224,16 +257,18 @@ export function plaqueOrnaments(o, { w, h, t, outline, def, bevel }) {
     }
   }
   if (o.scrolls) {
-    for (const side of [1, -1]) for (const v of [1, -1]) out.push(scroll(side, v, w, h, t));
+    const contours = outline.toPolygons();
+    for (const side of [1, -1]) for (const v of [1, -1]) out.push(scroll(side, v, w, h, t, contours));
   }
   if (o.laurel) {
     const L = h * 0.34, wid = h * 0.13, th = Math.max(1.2, t * 0.6);
     const n = 5;
+    const contours = outline.toPolygons();
     for (const side of [1, -1]) {
       const stemPts = [];
       for (let i = 0; i < n; i++) {
         const yy = -h * 0.36 + (i * h * 0.72) / (n - 1);
-        const x0 = side * (w / 2 - 1);
+        const x0 = side * (edgeX(contours, yy, w / 2) - 1.2);
         for (const [phi, k] of [[38, 1], [-4, 0.78]]) {
           const ang = rad(90 - side * phi); // direction of leaf axis (from +x)
           const len = L * k * (1 - 0.18 * (i / (n - 1)));
@@ -241,7 +276,7 @@ export function plaqueOrnaments(o, { w, h, t, outline, def, bevel }) {
           out.push(ellipsoid(len / 2, wid / 2 * k, th / 2, [0, 0, 0], 14).rotate([0, 0, (ang * 180) / Math.PI])
             .translate([x0 + dx * len * 0.5, yy + dy * len * 0.5, t * 0.45]));
         }
-        stemPts.push([side * (w / 2 - 1), yy, t * 0.45]);
+        stemPts.push([x0, yy, t * 0.45]);
       }
       out.push(tube(stemPts, th * 0.5, 8));
     }

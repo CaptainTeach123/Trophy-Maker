@@ -1,6 +1,6 @@
 // Assembles a trophy from the UI state into watertight solids.
 import {
-  Manifold, scoped, cached, dropCached, union, box, quality, toMeshData, meshStats, polys, bounds, rad, cyl,
+  Manifold, scoped, cached, dropCached, cleanDust, union, box, quality, toMeshData, meshStats, polys, bounds, rad, cyl,
 } from './kernel.js';
 import { getBase } from './parts/bases.js';
 import { getColumn } from './parts/columns.js';
@@ -13,7 +13,7 @@ export function defaultState() {
   return {
     base: { style: 'plinth', width: 90, depth: 90, height: 42 },
     column: { style: 'baluster', height: 44, radius: 9 },
-    topper: { style: 'cup', size: 100, text: '1', font: 'bebas', embolden: 0, stlId: null, rx: 0, ry: 0, rz: 0 },
+    topper: { style: 'cup', size: 100, text: '1', font: 'bebas', embolden: 0, backing: true, stlId: null, rx: 0, ry: 0, rz: 0 },
     plaque: {
       style: 'rounded', mount: 'front', width: 64, height: 18, thickness: 3, bevel: 0.8, textMode: 'raise', textDepth: 1,
       embolden: 0, tilt: 0,
@@ -89,6 +89,8 @@ function soupExtent(soup) {
   return Math.max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]);
 }
 
+const SINK = 0.3; // how far the plaque is pushed into the base (mm)
+
 /* ---------------------------------------------------------------- main */
 export function buildTrophy(state, assets = {}) {
   quality.factor = state.output.quality || 1;
@@ -115,14 +117,13 @@ export function buildTrophy(state, assets = {}) {
 
     dbg('base');
     /* ---- column ---- */
-    let colTop = baseTopZ, colInfo = null;
+    let colTop = baseTopZ;
     const cdef = getColumn(S.column.style);
     if (cdef.build) {
-      const col = cached('column', JSON.stringify([S.column, S.orn.column, qk]), () => decorateColumn(cdef.build({ height: S.column.height, radius: S.column.radius }), S.orn.column));
-      colInfo = col;
+      // built 0.6 mm taller than asked so it overlaps the base and the topper (exact face contact would leave two separate shells)
+      const col = cached('column', JSON.stringify([S.column, S.orn.column, qk]), () => decorateColumn(cdef.build({ height: S.column.height + 0.6, radius: S.column.radius }), S.orn.column));
       groups.column.push(col.solid.translate([base.top[0], base.top[1], baseTopZ - 0.3]));
-      // overlap into base 0.3mm for a clean weld, but keep the visible height right
-      colTop = baseTopZ + col.height;
+      colTop = baseTopZ + S.column.height;
     } else dropCached('column');
 
     dbg('column');
@@ -140,7 +141,7 @@ export function buildTrophy(state, assets = {}) {
           let bb = bounds(m);
           m = m.scale(T.size / (Math.max(...bb.size) || 1));
           bb = bounds(m);
-          m = decorateTopper(m.translate([-(bb.min[0] + bb.max[0]) / 2, -(bb.min[1] + bb.max[1]) / 2, -bb.min[2] - 0.3]), T.size, S.orn.topper);
+          m = decorateTopper(m.translate([-(bb.min[0] + bb.max[0]) / 2, -(bb.min[1] + bb.max[1]) / 2, -bb.min[2]]), T.size, S.orn.topper);
           return { solid: m, h: bounds(m).max[2] };
         });
       } else if (stlAsset) {
@@ -152,13 +153,14 @@ export function buildTrophy(state, assets = {}) {
       } else warnings.push('Choose an STL file for the topper.');
     } else if (tdef.build) {
       topperRes = cached('topper', topperKey, () => {
-        const m = decorateTopper(tdef.build(T.size, { text: T.text, font: T.font, embolden: T.embolden }), T.size, S.orn.topper);
+        const m = decorateTopper(tdef.build(T.size, { text: T.text, font: T.font, embolden: T.embolden, backing: T.backing }), T.size, S.orn.topper);
         return { solid: m, h: bounds(m).max[2] };
       });
     } else dropCached('topper');
     if (topperRes) {
-      groups.topper.push(topperRes.solid.translate([base.top[0], base.top[1], colTop]));
-      topperTop = colTop + topperRes.h;
+      // sink the topper 0.3 mm into whatever it stands on so the weld is a real overlap, not a coplanar touch
+      groups.topper.push(topperRes.solid.translate([base.top[0], base.top[1], colTop - 0.3]));
+      topperTop = colTop - 0.3 + topperRes.h;
     }
 
     dbg('topper');
@@ -173,7 +175,8 @@ export function buildTrophy(state, assets = {}) {
       const ph = Math.max(6, Math.min(PL.height, mnt.maxH));
       if (pw < PL.width - 0.01 || ph < PL.height - 0.01) warnings.push(`Plaque shrunk to ${pw.toFixed(0)}×${ph.toFixed(0)} mm to fit the base — pick a taller/wider base for a bigger plaque.`);
       const plRes = cached('plaque', JSON.stringify([PL, S.orn.plaque, pw, ph, mnt.curved, qk]), () => {
-        const plq = buildPlaque({ ...PL, width: pw, height: ph, orn: S.orn.plaque }, { embed: sep ? 0 : mnt.curved ? 5 : 4 });
+        // built SINK mm thicker and shifted back into the base: the weld is a true overlap, never a coplanar touch
+        const plq = buildPlaque({ ...PL, width: pw, height: ph, thickness: PL.thickness + (sep ? 0 : SINK), orn: S.orn.plaque }, { embed: sep ? 0 : mnt.curved ? 5 : 4 });
         const warp = (m) => {
           if (!mnt.curved) return m;
           const { a, b } = mnt.curved;
@@ -182,13 +185,12 @@ export function buildTrophy(state, assets = {}) {
         return { body: warp(plq.body), text: plq.text ? warp(plq.text) : null };
       });
       const { body, text } = plRes;
-      const place = (m) => m.rotate([-(mnt.tilt + (PL.tilt || 0)), 0, 0]).translate([0, mnt.y, mnt.z + (mnt.tilt ? 0 : 0)]);
+      const place = (m) => m.translate([0, sep ? 0 : SINK, 0]).rotate([-(mnt.tilt + (PL.tilt || 0)), 0, 0]).translate([0, mnt.y, mnt.z]);
       if (PL.mount === 'separate') {
         // lay flat beside the base so it can be printed on its own
         const flat = (m) => m.rotate([-90, 0, 0]).translate([0, 0, 0]);
         const f = flat(body);
         const fb = bounds(f);
-        const off = [0, 0, 0];
         const bf = bounds(base.solid);
         const dx = bf.max[0] + (fb.max[0] - fb.min[0]) / 2 + 12;
         const place2 = (m) => m.translate([dx - (fb.min[0] + fb.max[0]) / 2, -(fb.min[1] + fb.max[1]) / 2, -fb.min[2]]);
@@ -196,7 +198,6 @@ export function buildTrophy(state, assets = {}) {
         if (text) looseBodies.push({ name: 'plaque-text', group: 'plaqueText', manifold: place2(flat(text)) });
       } else {
         const placed = place(body);
-        dbg('plaque body ' + JSON.stringify(bounds(body).size) + ' placed ' + JSON.stringify(bounds(placed).min) + JSON.stringify(bounds(placed).max) + ' mnt ' + JSON.stringify(mnt) + ' PLtilt ' + PL.tilt);
         groups.plaque.push(placed);
         if (text) groups.plaqueText.push(place(text));
         plaqueInfo = { place, pw, ph, t: PL.thickness };
@@ -205,13 +206,11 @@ export function buildTrophy(state, assets = {}) {
 
     dbg('plaque');
     /* ---- extras ---- */
-    const baseB = bounds(base.solid);
     const zMid = baseTopZ * 0.5;
-    const topY = base.top[1];
     const anchorFor = (name) => {
       const hz = base.halfAt(Math.max(zMid, 0.5));
       switch (name) {
-        case 'baseFront': return { pos: [0, -hz[1] + 0.0, zMid], rotZ: 0, kind: 'face', surf: 0 };
+        case 'baseFront': return { pos: [0, -hz[1] + 0.0, zMid], rotZ: 0, kind: 'face' };
         case 'baseBack': return { pos: [0, hz[1], zMid], rotZ: 180, kind: 'face' };
         case 'baseLeft': return { pos: [-hz[0], 0, zMid], rotZ: -90, kind: 'face' };
         case 'baseRight': return { pos: [hz[0], 0, zMid], rotZ: 90, kind: 'face' };
@@ -279,11 +278,16 @@ export function buildTrophy(state, assets = {}) {
     }
 
     dbg('extras');
+    const usesStl = S.topper.style === 'stl' || S.extras.some((e) => e.type === 'stl');
+
     /* ---- assemble ---- */
     const bodies = [];
     const finalize = (m, name, group) => {
       if (!m || m.isEmpty()) return;
-      bodies.push({ name, group, manifold: m });
+      const dust = /text/i.test(name) ? { minSolid: 0.004, minVoid: 0.5 } // lettering: keep every dot and stop
+        : usesStl ? { minSolid: 0.5, minVoid: 2 } // never trim features of a user's own model
+        : { minSolid: 5, minVoid: 2 }; // our own geometry: floating bits under ~1.7 mm cubed can never print
+      bodies.push({ name, group, manifold: cleanDust(m, dust) });
     };
     const groupSolid = (g) => {
       if (!groups[g].length) return null;

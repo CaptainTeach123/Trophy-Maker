@@ -34,7 +34,16 @@ export function rectStack(hw, hd, prof, cr = 0) {
   }
   return union(pieces);
 }
-const rectPoly = (hw, hd, inset) => [[-(hw - inset), -(hd - inset)], [hw - inset, -(hd - inset)], [hw - inset, hd - inset], [-(hw - inset), hd - inset]];
+const rectPoly = (hw, hd, inset, cr = 0) => {
+  const x = hw - inset, y = hd - inset;
+  const r = clamp(cr - inset, 0, Math.min(x, y) - 0.01);
+  if (r < 0.2) return [[-x, -y], [x, -y], [x, y], [-x, y]];
+  // same corner sampling as rectRing so ornaments follow the real outline
+  const out = [];
+  for (const [cx, cy, a0] of [[x - r, y - r, 0], [-x + r, y - r, 90], [-x + r, -y + r, 180], [x - r, -y + r, 270]])
+    for (let i = 0; i <= 6; i++) { const a = rad(a0 + (i / 6) * 90); out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return out;
+};
 const ngonPoly = (n, apothem, rot = 0) => {
   const R = apothem / Math.cos(Math.PI / n);
   return Array.from({ length: n }, (_, i) => { const a = rad(rot + (i / n) * 360); return [Math.cos(a) * R, Math.sin(a) * R]; });
@@ -51,10 +60,13 @@ function insetAt(prof, z) {
 }
 
 /* ----- generic rectangular base from a profile ----- */
+/** profiles must never go back down: clamp z to the running maximum so odd sizes cannot fold the shape over itself */
+const monotone = (prof) => { let zmax = -Infinity; return prof.map(([a, z]) => { zmax = Math.max(zmax, z); return [a, zmax]; }); };
+
 function rectBase(p, prof, o = {}) {
   const hw = p.width / 2, hd = p.depth / 2, h = p.height;
   const maxIn = Math.min(hw, hd) * 0.92;
-  prof = prof.map(([i, z]) => [Math.min(i, maxIn), z]);
+  prof = monotone(prof.map(([i, z]) => [Math.min(i, maxIn), z]));
   const solid = rectStack(hw, hd, prof, o.cr || 0);
   const topInset = prof[prof.length - 1][0];
   const [b0, b1] = o.band || [h * 0.12, h * 0.78];
@@ -66,8 +78,8 @@ function rectBase(p, prof, o = {}) {
     topHalf: [hw - topInset, hd - topInset],
     mount: { y: -(hd - ins), z: zm, tilt: o.tilt || 0, maxW: 2 * (hw - ins) - 4, maxH: b1 - b0, back: hd },
     halfAt: (z) => { const i = insetAt(prof, clamp(z, 0, prof[prof.length - 1][1])); return [hw - i, hd - i]; },
-    topPoly: rectPoly(hw, hd, topInset),
-    footPoly: rectPoly(hw, hd, 0),
+    topPoly: rectPoly(hw, hd, topInset, o.cr || 0),
+    footPoly: rectPoly(hw, hd, 0, o.cr || 0),
     round: false,
   };
 }
@@ -76,7 +88,7 @@ function rectBase(p, prof, o = {}) {
 function lathedBase(p, n, rProf, o = {}) {
   const h = p.height;
   const R = p.width / 2;
-  const prof = rProf(R, h);
+  const prof = monotone(rProf(R, h));
   const sy = o.oval ? p.depth / p.width : 1;
   const solid = polyLathe(prof, n, { rot: o.rot || 0, sx: 1, sy });
   const topR = prof[prof.length - 1][0];
@@ -125,7 +137,7 @@ export const BASES = [
   {
     id: 'plinth', name: 'Moulded Plinth', rect: true,
     build: (p) => {
-      const h = p.height, s = Math.min(p.width, p.depth) * 0.045;
+      const h = p.height, s = Math.min(Math.min(p.width, p.depth) * 0.045, h * 0.08);
       const prof = [[0, 0], [0, h * 0.1], [s, h * 0.1 + s * 0.8], [s * 2, h * 0.1 + s * 1.6], [s * 2, h * 0.78],
         [s * 1.2, h * 0.78 + s * 0.5], [s * 0.4, h * 0.78 + s * 1.0], [0, h * 0.78 + s * 1.2], [0, h * 0.93], [s * 0.7, h]];
       return rectBase(p, prof, { band: [h * 0.1 + s * 1.6 + 1, h * 0.78 - 1] });
@@ -263,7 +275,7 @@ export const BASES = [
   {
     id: 'oct2', name: 'Octagon Plinth',
     build: (p) => lathedBase(p, 8, (R, h) => {
-      const s = R * 0.06;
+      const s = Math.min(R * 0.06, h * 0.045);
       return [[R, 0], [R, h * 0.12], [R - s, h * 0.12 + s], [R - s * 2, h * 0.12 + s * 2], [R - s * 2, h * 0.8], [R - s, h * 0.8 + s * 0.5], [R, h * 0.8 + s], [R, h * 0.92], [R - s * 0.8, h]];
     }, { rot: 22.5, band: [p.height * 0.2, p.height * 0.76] }),
   },

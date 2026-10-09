@@ -234,7 +234,7 @@ export class ThumbRenderer {
     this.camera.lookAt(c);
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);
-    const url = this.canvas.toDataURL('image/png');
+    const url = this.canvas.toDataURL('image/webp', 0.88);
     this.scene.remove(group);
     group.children.forEach((m) => m.geometry.dispose());
     return url;

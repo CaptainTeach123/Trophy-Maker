@@ -258,6 +258,19 @@ export function bounds(m) {
   return { min: b.min, max: b.max, size: [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]] };
 }
 
+/**
+ * Drop numerical dust: connected shells too small to ever print (tiny sealed cavities and floating specks that the
+ * booleans can leave at near-coincident surfaces). Sealed cavities under `minVoid` mm³ are filled in; floating specks
+ * under `minSolid` mm³ are removed. Lettering passes a far smaller `minSolid` so full stops and dots survive.
+ */
+export function cleanDust(m, { minSolid = 0.5, minVoid = 2 } = {}) {
+  const comps = m.decompose();
+  if (comps.length < 2) return m;
+  const real = comps.filter((c) => { const v = c.volume(); return v < 0 ? -v >= minVoid : v >= minSolid; });
+  if (real.length === comps.length || !real.length) return m;
+  return Manifold.compose(real);
+}
+
 export function emptySolid() {
   return track(Manifold.cube([1, 1, 1]).subtract(Manifold.cube([3, 3, 3], true)));
 }

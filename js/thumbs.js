@@ -51,6 +51,8 @@ const STORE = 'trophymaker.thumbs.' + VERSION;
 
 export class Thumbs {
   constructor() {
+    // Pre-rendered thumbnails shipped in /thumbs (see tools/gen-thumbs.mjs); anything missing is rendered on demand.
+    this.manifest = fetch(new URL('../thumbs/manifest.json', import.meta.url)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     this.cache = new Map();
     try { for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(STORE) || '{}'))) this.cache.set(k, v); } catch { /* storage unavailable */ }
     this.waiting = new Map(); // key -> [callbacks]
@@ -64,16 +66,33 @@ export class Thumbs {
   want(kind, id, cb, priority = false) {
     const k = this.key(kind, id);
     if (this.cache.has(k)) { cb(this.cache.get(k)); return; }
+    if (!this.manifestLoaded) {
+      this.manifest.then((m) => { this.manifestLoaded = true; this.statics = m; this.want(kind, id, cb, priority); });
+      return;
+    }
+    if (this.statics[k]) { const url = new URL('../thumbs/' + this.statics[k], import.meta.url).href; this.cache.set(k, url); cb(url); return; }
     if (this.waiting.has(k)) { this.waiting.get(k).push(cb); if (priority) this.bump(k); return; }
     this.waiting.set(k, [cb]);
     const task = { k, kind, id };
     if (priority) this.queue.unshift(task); else this.queue.push(task);
     this.pump();
   }
+  /** Render every thumbnail from scratch (used by tools/gen-thumbs.mjs). Returns { key: dataURL }. */
+  async renderAll(items) {
+    const out = {};
+    this.renderer = this.renderer || new ThumbRenderer(120);
+    for (const [kind, id] of items) {
+      if (kind === 'preset') await loadFontsFor(id);
+      const res = scoped(() => BUILDERS[kind](id));
+      if (res) out[this.key(kind, id)] = this.renderer.render(res.bodies, res.opts || {});
+    }
+    return out;
+  }
   save() {
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORE, JSON.stringify(Object.fromEntries(this.cache))); } catch { /* quota or private mode */ }
+      const generated = Object.fromEntries([...this.cache].filter(([, v]) => v.startsWith('data:')));
+      try { localStorage.setItem(STORE, JSON.stringify(generated)); } catch { /* quota or private mode */ }
     }, 1500);
   }
   bump(k) {

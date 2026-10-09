@@ -80,7 +80,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .card .th { aspect-ratio: 1; width: 100%; border-radius: 8px; background: radial-gradient(circle at 50% 35%, #2c313c, #1a1d24); display: grid; place-items: center; overflow: hidden; }
 .card img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .card .th.empty::after { content: ""; width: 38%; aspect-ratio: 1; border-radius: 50%; border: 2px solid #3a4050; border-top-color: transparent; animation: spin 1s linear infinite; }
-.card .th.none::after { content: "∅"; font-size: 28px; color: #4c5367; animation: none; border: 0; width: auto; aspect-ratio: auto; }
+.card .th.none::after { content: attr(data-g); font-size: 28px; font-weight: 700; letter-spacing: .04em; color: #4c5367; animation: none; border: 0; width: auto; aspect-ratio: auto; }
 .card .nm { margin-top: 5px; font-size: 12px; line-height: 1.2; color: var(--text); min-height: 2.4em; display: flex; align-items: center; justify-content: center; }
 .cards.wide { grid-template-columns: repeat(2, 1fr); }
 .cards.wide .card { text-align: left; }
@@ -119,8 +119,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .panelbox { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 10px 0; }
 .panelbox .hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 .panelbox .hd b { font-size: 13.5px; }
-.lines .linebox { display: grid; grid-template-columns: 1fr 1fr 74px; gap: 6px; margin-bottom: 6px; }
+.lines .linebox { display: grid; grid-template-columns: 1fr 74px; gap: 6px; margin-bottom: 2px; }
 .lines .linebox input[type=text] { grid-column: 1 / -1; }
+.sl.wide input[type=number] { width: 130px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
 .kv span:nth-child(odd) { color: var(--muted); }
 
@@ -144,3 +145,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .cards { grid-template-columns: repeat(2, 1fr); }
   .row { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* ---------- fatal error overlay ---------- */
+#fatal { position: fixed; inset: 0; z-index: 99; display: none; place-items: center; background: #0d0f13f2; padding: 24px; }
+#fatal.on { display: grid; }
+#fatal div { max-width: 520px; background: var(--panel-2); border: 1px solid var(--bad); border-radius: var(--radius); padding: 20px 22px; }
+#fatal h2 { margin: 0 0 8px; font: 600 18px Georgia, serif; color: var(--bad); }

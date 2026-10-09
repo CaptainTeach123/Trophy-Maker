@@ -8,6 +8,7 @@ import { BASES } from '../js/parts/bases.js';
 import { COLUMNS } from '../js/parts/columns.js';
 import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
+import { PRESETS } from '../js/presets.js';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 setFontLoader(async (f) => { const b = fs.readFileSync(path.join(dir, '../fonts', f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); });
@@ -38,6 +39,15 @@ if (!only || only === 'orn') {
   Object.assign(s.orn.topper, { wings: true, halo: true });
   Object.assign(s.orn.plaque, { border: true, doubleBorder: true, studs: true, scrolls: true, laurel: true });
   check('all ornaments', s);
+}
+// every option card needs a pre-rendered thumbnail (run `node tools/gen-thumbs.mjs` after adding parts)
+if (!only) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, '../thumbs/manifest.json'), 'utf8'));
+  const missing = [];
+  const need = (kind, list) => list.filter((x) => x.build !== null).forEach((x) => { if (!manifest[`${kind}:${x.id}`]) missing.push(`${kind}:${x.id}`); });
+  need('base', BASES); need('column', COLUMNS); need('topper', TOPPERS); need('plaque', PLAQUES);
+  PRESETS.forEach((p) => { if (!manifest[`preset:${p.id}`]) missing.push(`preset:${p.id}`); });
+  if (missing.length) { console.log('MISSING thumbnails:', missing.join(', '), '— run: node tools/gen-thumbs.mjs'); fails++; } else console.log('ok   thumbnails cover every option');
 }
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

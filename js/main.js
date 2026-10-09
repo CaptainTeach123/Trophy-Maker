@@ -12,6 +12,23 @@ import { TOPPERS } from './parts/toppers.js';
 import { PLAQUES } from './parts/plaques.js';
 
 const STORE = 'trophymaker.design.v1';
+
+/** Make a loaded/shared design safe: unknown styles or fonts fall back to defaults instead of breaking the build. */
+function sanitize(st) {
+  const d = defaultState();
+  const known = (list, id, fallback) => (list.some((x) => x.id === id) ? id : fallback);
+  st.base.style = known(BASES, st.base.style, d.base.style);
+  st.column.style = known(COLUMNS, st.column.style, d.column.style);
+  st.topper.style = known(TOPPERS, st.topper.style, d.topper.style);
+  st.plaque.style = known(PLAQUES, st.plaque.style, d.plaque.style);
+  const fonts = listFonts();
+  const okFont = (id) => (fonts.some((f) => f.id === id) ? id : 'cinzel');
+  st.topper.font = okFont(st.topper.font);
+  st.plaque.lines = (st.plaque.lines || []).slice(0, 6).map((l) => ({ text: String(l.text ?? ''), font: okFont(l.font), size: Number(l.size) || 4 }));
+  st.extras = (st.extras || []).slice(0, 24).map((e) => (e.type === 'text' ? { ...e, font: okFont(e.font) } : e));
+  if (!['weld', 'parts'].includes(st.output.mode)) st.output.mode = 'weld';
+  return st;
+}
 const $ = (id) => document.getElementById(id);
 
 const app = {
@@ -29,7 +46,7 @@ function loadSaved() {
   try {
     const raw = localStorage.getItem(STORE);
     if (!raw) return null;
-    return applyPatch(JSON.parse(raw));
+    return sanitize(applyPatch(JSON.parse(raw)));
   } catch { return null; }
 }
 /* shareable link: the design JSON, deflated + base64url in the URL hash */
@@ -39,7 +56,7 @@ function loadFromHash() {
   try {
     const m = location.hash.match(/^#d=(.+)$/);
     if (!m) return null;
-    return applyPatch(JSON.parse(strFromU8(inflateSync(unb64(m[1])))));
+    return sanitize(applyPatch(JSON.parse(strFromU8(inflateSync(unb64(m[1]))))));
   } catch { return null; }
 }
 function shareLink() {
@@ -60,7 +77,13 @@ function toast(msg, kind = '', ms = 6000) {
 }
 
 /* ------------------------------------------------------------------ viewer */
-const viewer = new Viewer($('view'));
+let viewer;
+try {
+  viewer = new Viewer($('view'));
+} catch (e) {
+  window.__fatal && window.__fatal('Your browser could not start WebGL, which the 3D preview needs. Try a current Chrome, Edge, Firefox or Safari with hardware acceleration enabled.');
+  throw e;
+}
 app.viewer = viewer;
 
 function initViewbar() {
@@ -252,12 +275,23 @@ function removeAsset(id) {
 $('fileDesign').addEventListener('change', async (e) => {
   const f = e.target.files[0];
   if (!f) return;
-  try { app.state = applyPatch(JSON.parse(await f.text())); persist(); schedule(0); app.rerender(); firstBuild = true; toast('Design loaded.', '', 2500); } catch { toast('That is not a Trophy Maker design file.', 'err'); }
+  try { app.state = sanitize(applyPatch(JSON.parse(await f.text()))); persist(); schedule(0); app.rerender(); firstBuild = true; toast('Design loaded.', '', 2500); } catch { toast('That is not a Trophy Maker design file.', 'err'); }
   e.target.value = '';
 });
 
 $('btnExport').addEventListener('click', download);
 $('btnRandom').addEventListener('click', randomize);
+
+/* ------------------------------------------------------------------ dev hook: tools/gen-thumbs.mjs */
+window.__renderThumbs = () => {
+  const items = [];
+  BASES.forEach((x) => items.push(['base', x.id]));
+  COLUMNS.filter((x) => x.build).forEach((x) => items.push(['column', x.id]));
+  TOPPERS.filter((x) => x.build).forEach((x) => items.push(['topper', x.id]));
+  PLAQUES.forEach((x) => items.push(['plaque', x.id]));
+  PRESETS.forEach((x) => items.push(['preset', x.id]));
+  return app.thumbs.renderAll(items);
+};
 
 /* ------------------------------------------------------------------ go */
 app.ui = initUI(app);

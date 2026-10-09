@@ -121,7 +121,13 @@ export function buildPlaque(pl, o = {}) {
       meshes.push(cs.translate([(l.dx || 0), cy + (l.dy || 0)]));
     });
     if (meshes.length) {
-      const all = meshes.length > 1 ? meshes.reduce((a, b) => a.add(b)) : meshes[0];
+      let all = meshes.length > 1 ? meshes.reduce((a, b) => a.add(b)) : meshes[0];
+      // fit on the *actual* glyph extents (decorative fonts often exceed their nominal cap height), then centre
+      const bb = all.bounds();
+      const k2 = Math.min(1, usableW / Math.max(bb.max[0] - bb.min[0], 1e-6), usableH / Math.max(bb.max[1] - bb.min[1], 1e-6));
+      if (k2 < 0.999) all = all.scale([k2, k2]);
+      const b2 = all.bounds();
+      all = all.translate([-(b2.min[0] + b2.max[0]) / 2, -(b2.min[1] + b2.max[1]) / 2]);
       if (pl.textMode === 'engrave') {
         const cut = Manifold.extrude(all, depth + 1, 0, 0, 1).translate([0, 0, t - depth]);
         const base = union(parts);

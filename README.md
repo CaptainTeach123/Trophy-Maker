@@ -27,7 +27,9 @@ upload ever leaves it.
 Geometry is built with [Manifold](https://github.com/elalish/manifold), a robust mesh-boolean kernel (WebAssembly).
 Every part is a closed, correctly oriented solid and every weld is a real boolean union, so there are no
 internal faces, flipped normals, gaps or self-intersections. The status bar shows **✓ Watertight** only when every body
-in the export is a valid manifold. An automated fuzz test builds hundreds of random combinations and asserts the same.
+in the export is a valid manifold. Parts are deliberately overlapped by a fraction of a millimetre where they meet (never
+just touching), so a welded trophy is **one connected solid** with no floating islands, internal voids or zero-volume
+slivers — the tests below assert exactly that on every preset and hundreds of random combinations.
 
 **Uploading your own STL?** If it is watertight it is welded into the trophy like any other part. If it has holes
 or non-manifold edges it can't be fused safely, so it's exported as its own separate shell and you get a warning.
@@ -67,7 +69,8 @@ js/presets.js         full-trophy presets
 js/parts/             bases.js columns.js toppers.js plaques.js ornaments.js  ← add new options here
 vendor/               manifold-3d, three.js, opentype.js, fflate (vendored; see THIRD_PARTY.md)
 fonts/                bundled OFL fonts
-tests/                smoke.mjs (every option) and fuzz.mjs (random combinations)
+tests/                smoke.mjs (every option), connected.mjs (one clean solid), fuzz.mjs (random combinations)
+tools/gen-thumbs.mjs  renders the pre-built option thumbnails in thumbs/
 ```
 
 ### Adding a part
@@ -84,8 +87,10 @@ Its thumbnail and place in the UI appear automatically. Run `npm test` to check 
 ## Tests
 
 ```
-node tests/smoke.mjs       # every base / column / topper / plaque / ornament builds a valid solid
-node tests/fuzz.mjs 100    # 100 random combinations incl. extras, parts mode, scaling
+node tests/smoke.mjs       # every base / column / topper / plaque / ornament builds a valid solid (+ thumbnails exist)
+node tests/connected.mjs   # every preset/option exports as ONE connected solid: no floating bits, voids or slivers
+node tests/fuzz.mjs 100    # 100 random combinations incl. extras, parts mode, scaling, connectivity
+node tools/gen-thumbs.mjs  # regenerate the option-card previews in /thumbs (needs playwright) after changing geometry
 ```
 
 ## License

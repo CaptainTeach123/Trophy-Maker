@@ -10,6 +10,7 @@ import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
 import { PRESETS, applyPatch } from '../js/presets.js';
 import { clearCache } from '../js/kernel.js';
+import { problems } from './connected.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 setFontLoader(async (f) => { const b = fs.readFileSync(path.join(dir, '../fonts', f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); });
@@ -20,6 +21,7 @@ const rand = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return s
 const pick = (a) => a[Math.floor(rand() * a.length)];
 const range = (a, b) => a + rand() * (b - a);
 const N = Number(process.argv[2]) || 60;
+const ONLY = process.argv[4] !== undefined ? Number(process.argv[4]) : -1; // re-run just one case and dump its state
 let fails = 0, slow = 0;
 const t00 = performance.now();
 
@@ -27,7 +29,14 @@ function validate(label, state) {
   const t0 = performance.now();
   try {
     const r = buildTrophy(state, {});
-    const ok = r.bodies.length > 0 && r.bodies.every((b) => b.watertight && b.volume > 0) && isFinite(r.stats.size[2]) && r.stats.size[2] > 5;
+    let ok = r.bodies.length > 0 && r.bodies.every((b) => b.watertight && b.volume > 0) && isFinite(r.stats.size[2]) && r.stats.size[2] > 5;
+    let conn = [];
+    if (ok) {
+      // structural check on the design without free-placed extras (those are the user's responsibility)
+      const bare = { ...state, extras: [], plaque: { ...state.plaque, tilt: 0 }, output: { ...state.output } };
+      conn = problems(bare, (state.extras.length || state.plaque.tilt) ? buildTrophy(bare, {}) : r);
+    }
+    if (conn.length) { ok = false; console.log('DISCONNECTED', label, conn.join(' | ')); }
     const ms = performance.now() - t0;
     if (ms > 2500) slow++;
     if (!ok) { fails++; console.log('FAIL', label, JSON.stringify(r.bodies.map((b) => [b.name, b.watertight, b.volume])), r.stats.size); fs.writeFileSync(path.join(dir, 'last-fail.json'), JSON.stringify(state)); }
@@ -54,11 +63,17 @@ for (let i = 0; i < N; i++) {
   for (let k = 0; k < ne; k++) {
     const e = newExtra('text');
     e.text = pick(['JANE DOE', '2026', 'Thank you']); e.anchor = pick(ANCHORS)[0]; e.mode = pick(['weld', 'engrave', 'separate']); e.size = range(3, 14); e.depth = range(0.5, 3);
-    e.orient = rand() < 0.5 ? 'upright' : 'flat'; e.oz = range(-10, 10);
+    // same rules the UI applies: lettering stands upright on vertical faces and lies flat on top surfaces;
+    // text dropped on the bare print bed can only be a separate piece
+    e.orient = ['baseTop', 'topperTop', 'floor'].includes(e.anchor) ? 'flat' : 'upright';
+    if (e.anchor === 'floor') e.mode = 'separate';
+    e.oz = range(-10, 10);
     s.extras.push(e);
   }
   s.output.mode = pick(['weld', 'weld', 'parts']); s.output.splitText = rand() < 0.3; s.output.scaleTo = rand() < 0.2 ? range(100, 250) : 0;
   s.output.quality = pick([0.6, 1, 1.6]);
+  if (ONLY >= 0 && i !== ONLY) { continue; }
+  if (ONLY >= 0) fs.writeFileSync(path.join(dir, 'case.json'), JSON.stringify(s, null, 1));
   if (validate(`#${i} ${s.base.style}/${s.column.style}/${s.topper.style}/${s.plaque.style}`, s) && i % 10 === 0) process.stdout.write('.');
   if (i % 8 === 0) clearCache();
 }

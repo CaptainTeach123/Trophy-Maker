@@ -95,7 +95,7 @@ export function initUI(app) {
       const card = h('button', { class: 'card' + (current === it.id ? ' on' : ''), type: 'button', title: it.name }, th,
         h('div', { class: 'nm' }, h('span', {}, it.name, it.blurb && h('span', { class: 'sub', text: it.blurb }))));
       card.addEventListener('click', () => { wrap.querySelectorAll('.card').forEach((c) => c.classList.remove('on')); card.classList.add('on'); onPick(it.id); });
-      if (it.noThumb) { th.className = 'th none'; } else {
+      if (it.noThumb) { th.className = 'th none'; th.dataset.g = it.glyph || '∅'; } else {
         app.thumbs.want(kind, it.id, (url) => {
           th.classList.remove('empty');
           if (url) { img.src = url; th.append(img); } else th.classList.add('none');
@@ -172,7 +172,7 @@ export function initUI(app) {
 
     topper() {
       const t = S().topper;
-      const items = TOPPERS.map((x) => ({ ...x, noThumb: x.id === 'none' || x.id === 'stl' || x.id === 'text' && false }));
+      const items = TOPPERS.map((x) => ({ ...x, noThumb: x.id === 'none' || x.id === 'stl', glyph: x.id === 'stl' ? 'STL' : '∅' }));
       const out = [
         h('h2', { text: 'Topper' }),
         h('p', { class: 'lead', text: 'The star of the show. Use “Your STL” for any model you like, or “Custom Text” for lettering.' }),
@@ -182,7 +182,8 @@ export function initUI(app) {
       ];
       if (t.style === 'text') {
         out.push(h('h3', { text: 'Lettering' }), textInput('Text', t, 'text', 'MVP'), fontSelect('Font', t, 'font'),
-          slider('Thicken', t, 'embolden', 0, 2, 0.05), fontUploadRow());
+          slider('Thicken', t, 'embolden', 0, 2, 0.05),
+          check('Backing panel', 'A thin panel behind the letters keeps dots, umlauts and loose strokes attached', t, 'backing'), fontUploadRow());
       }
       if (t.style === 'stl') {
         out.push(h('h3', { text: 'Your STL' }), ...stlPicker(t, 'stlId'),
@@ -301,7 +302,7 @@ export function initUI(app) {
           modeCard('parts', 'Separate parts (ZIP)', 'Base, column, topper, plaque and text as their own non-overlapping STLs, positioned as assembled — for multi-colour or glue-up.')),
         o.mode === 'weld' && check('Keep plaque text as its own body', 'Exports raised lettering as a separate shell, handy for colour changes', o, 'splitText'),
         h('h3', { text: 'Size & quality' }),
-        h('div', { class: 'row' }, h('label', { text: 'Scale to height' }), h('div', { class: 'sl' }, (() => {
+        h('div', { class: 'row' }, h('label', { text: 'Scale to height' }), h('div', { class: 'sl wide' }, (() => {
           const n = h('input', { type: 'number', min: 0, max: 1000, step: 1, value: o.scaleTo || '', placeholder: 'as designed' });
           n.addEventListener('change', () => { o.scaleTo = Number(n.value) || 0; changed(); });
           return n;

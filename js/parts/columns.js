@@ -4,10 +4,24 @@ import { Manifold, lathe, polyLathe, polys, union, cyl, ball, segs, rad, box } f
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+/** radius of a [[r,z],...] profile at height z (linear interpolation) */
+function profileRadius(prof) {
+  return (z) => {
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [r0, z0] = prof[i], [r1, z1] = prof[i + 1];
+      if (z >= Math.min(z0, z1) - 1e-9 && z <= Math.max(z0, z1) + 1e-9) return z1 === z0 ? Math.min(r0, r1) : r0 + ((r1 - r0) * (z - z0)) / (z1 - z0);
+    }
+    return prof[prof.length - 1][0];
+  };
+}
+/** z must never go back down — clamp to the running maximum so unusual heights cannot fold the profile over itself */
+function monotone(prof) { let zmax = -Infinity; return prof.map(([r, z]) => { zmax = Math.max(zmax, z); return [r, zmax]; }); }
 function turned(p, fn) {
   // fn(r, h) -> profile [[r,z],...]
-  const solid = lathe(fn(p.radius, p.height), segs(p.radius * 1.4, 32));
-  return { solid, height: p.height, topR: p.radius * 0.8 };
+  const prof = monotone(fn(p.radius, p.height));
+  const solid = lathe(prof, segs(p.radius * 1.4, 32));
+  // radiusAt(z): guaranteed-solid radius at height z, used by ornaments so they never float off the shaft
+  return { solid, height: p.height, topR: p.radius * 0.8, radiusAt: profileRadius(prof) };
 }
 
 export const COLUMNS = [
@@ -59,14 +73,14 @@ export const COLUMNS = [
     id: 'hex', name: 'Hexagonal Column',
     build: (p) => ({
       solid: polyLathe([[p.radius * 1.1, 0], [p.radius * 1.1, p.height]], 6),
-      height: p.height, topR: p.radius * 0.9,
+      height: p.height, topR: p.radius * 0.9, radiusAt: () => p.radius * 1.1 * 0.97,
     }),
   },
   {
     id: 'square', name: 'Square Pillar',
     build: (p) => ({
       solid: box(p.radius * 1.7, p.radius * 1.7, p.height),
-      height: p.height, topR: p.radius * 0.85,
+      height: p.height, topR: p.radius * 0.85, radiusAt: () => p.radius * 0.85 * 0.97,
     }),
   },
   {
@@ -84,7 +98,7 @@ export const COLUMNS = [
       const div = Math.max(12, Math.round(p.height * 1.4));
       const twisted = Manifold.extrude(cs, p.height, div, 220, 1);
       const cap = (z) => cyl(Math.min(3, p.height * 0.07), R * 1.2, R * 1.2, [0, 0, z]);
-      return { solid: union([twisted, cap(0), cap(p.height - Math.min(3, p.height * 0.07))]), height: p.height, topR: R * 0.95 };
+      return { solid: union([twisted, cap(0), cap(p.height - Math.min(3, p.height * 0.07))]), height: p.height, topR: R * 0.95, radiusAt: () => R * 0.68 };
     },
   },
   {
@@ -103,7 +117,7 @@ export const COLUMNS = [
       const sh = shaft.subtract(fl.translate([0, 0, 0]));
       const base = lathe([[r * 1.3, 0], [r * 1.3, cH * 0.5], [r * 1.05, cH]], segs(r, 32));
       const cap = lathe([[r * 0.95, h - cH], [r * 1.2, h - cH * 0.5], [r * 1.35, h - cH * 0.4], [r * 1.35, h]], segs(r, 32));
-      return { solid: union([sh, base, cap]), height: h, topR: r * 1.2 };
+      return { solid: union([sh, base, cap]), height: h, topR: r * 1.2, radiusAt: (z) => (z < cH ? r * 1.05 : z > h - cH ? r * 0.95 : r * 0.78) };
     },
   },
   {
@@ -112,9 +126,10 @@ export const COLUMNS = [
       const pts = [[r * 1.3, 0], [r * 1.3, h * 0.04]];
       const rings = Math.max(2, Math.round(h / 14));
       pts.push([r, h * 0.08]);
+      const gap = (h * 0.84) / (rings + 1);
       for (let i = 1; i <= rings; i++) {
-        const z = (h * 0.08) + ((h * 0.84) * i) / (rings + 1);
-        const w = Math.min(h * 0.03, 2.2);
+        const z = (h * 0.08) + gap * i;
+        const w = Math.min(h * 0.03, 2.2, gap * 0.2); // ring half-width never exceeds a fifth of the spacing
         pts.push([r, z - w * 2], [r * 1.28, z - w], [r * 1.28, z + w], [r, z + w * 2]);
       }
       pts.push([r, h * 0.92], [r * 1.3, h * 0.96], [r * 1.3, h]);

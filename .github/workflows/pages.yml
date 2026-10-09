@@ -26,6 +26,8 @@ jobs:
           node-version: 22
       - name: Geometry smoke test (every option must produce a watertight solid)
         run: node tests/smoke.mjs
+      - name: Connectivity test (every design must export as ONE solid — no floating bits, voids or slivers)
+        run: node tests/connected.mjs
       - name: Random-combination fuzz test
         run: node tests/fuzz.mjs 30
 

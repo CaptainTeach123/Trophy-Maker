@@ -260,10 +260,23 @@ function laurel(s, withStar = false) {
   const zc = zBase + Rw + 0.075 * s;
   const right = laurelBranch(Rw, s);
   const wreath = union([right, mirrorX(right)]);
-  const bow = union([ellipsoid(0.06 * s, 0.012 * s, 0.025 * s, [0.06 * s, 0, -Rw - 0.02 * s].map((v, i) => v), 16).rotate([0, 25, 0]),
-    ellipsoid(0.06 * s, 0.012 * s, 0.025 * s, [-0.06 * s, 0, -Rw - 0.02 * s], 16).rotate([0, -25, 0]), ball(0.02 * s, [0, 0, -Rw - 0.02 * s], 12)]);
+  const bz = -Rw - 0.02 * s;
+  const endX = Rw * Math.cos(rad(78)), endZ = -Rw * Math.sin(rad(78));
+  const bow = union([ellipsoid(0.06 * s, 0.012 * s, 0.025 * s, [0.06 * s, 0, bz], 16).rotate([0, 25, 0]),
+    ellipsoid(0.06 * s, 0.012 * s, 0.025 * s, [-0.06 * s, 0, bz], 16).rotate([0, -25, 0]), ball(0.02 * s, [0, 0, bz], 12),
+    // ribbon ties joining the knot to both branch ends
+    tube([[endX, 0, endZ], [endX * 0.5, 0, (endZ + bz) / 2 - 0.004 * s], [0, 0, bz]], 0.011 * s, 8),
+    tube([[-endX, 0, endZ], [-endX * 0.5, 0, (endZ + bz) / 2 - 0.004 * s], [0, 0, bz]], 0.011 * s, 8)]);
   const parts = [foot(s, 0.15), cyl(zc - Rw - 0.01 * s, 0.045 * s, 0.045 * s), wreath.translate([0, 0, zc]), bow.translate([0, 0, zc])];
-  if (withStar) parts.push(bevelStandUp(Rw * 0.62, 0.3).translate([0, 0, zc + Rw * 0.04]));
+  if (withStar) {
+    const Rs = Rw * 0.62;
+    parts.push(bevelStandUp(Rs, 0.3).translate([0, 0, zc + Rw * 0.04]));
+    // slim spokes from the star tips out to the wreath so the star is part of the same solid
+    for (let i = 0; i < 5; i++) {
+      const a = rad(90 + i * 72);
+      parts.push(tube([[Math.cos(a) * Rs * 0.8, 0, zc + Rw * 0.04 + Math.sin(a) * Rs * 0.8], [Math.cos(a) * Rw, 0, zc + Math.sin(a) * Rw]], 0.008 * s, 6));
+    }
+  }
   // tie wreath to the post
   parts.push(cyl(0.05 * s, 0.045 * s, 0.045 * s, [0, 0, zc - Rw - 0.035 * s]));
   return union(parts);
@@ -287,7 +300,9 @@ export function wingPair(span, zc, thick = 1) {
       .translate([dx * L / 2 + span * 0.04, -span * 0.025, dz * L / 2 + span * 0.02]));
   }
   const w = union(feathers);
-  return union([w, mirrorX(w)]).translate([0, 0, zc]);
+  // central hub fuses both wings into one piece and fills the pockets between feather roots
+  const hub = ellipsoid(span * 0.09, span * 0.045 * thick, span * 0.12, [0, 0, 0], 20);
+  return union([w, mirrorX(w), hub]).translate([0, 0, zc]);
 }
 function wingedOrb(s) {
   const span = 0.4 * s;
@@ -315,7 +330,7 @@ function figure(s) {
   // torso
   parts.push(hullOf([ellipsoid(U(10), U(6), U(5), [0, 0, U(47)], 16), ellipsoid(U(13), U(6.5), U(5), [0, 0, U(70)], 16)]));
   // head + neck
-  parts.push(cyl(U(6), U(3.4), U(3.4), [0, 0, U(70)], 12), ball(U(8), [0, 0, U(84)], 28));
+  parts.push(cyl(U(12), U(3.6), U(3.6), [0, 0, U(68)], 12), ball(U(8), [0, 0, U(84)], 28));
   // raised arms
   parts.push(tube([[U(12), 0, U(70)], [U(22), 0, U(80)], [U(30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
   parts.push(tube([[U(-12), 0, U(70)], [U(-22), 0, U(80)], [U(-30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
@@ -354,20 +369,21 @@ function torch(s) {
 function rocket(s) {
   const unit = s / 100;
   const U = (v) => v * unit;
-  const prof = [[U(7), U(12)], [U(9), U(18)], [U(10.5), U(26)], [U(10.5), U(66)], [U(9.8), U(74)], [U(8), U(83)], [U(5), U(92)], [U(0), U(100)]];
+  const prof = [[U(7), U(11)], [U(9), U(18)], [U(10.5), U(26)], [U(10.5), U(66)], [U(9.8), U(74)], [U(8), U(83)], [U(5), U(92)], [U(0), U(100)]];
   const body = lathe(prof, 48);
-  const bell = lathe([[U(6), U(10)], [U(8), U(15)], [U(8), U(12)], [U(9), U(8)], [U(7), U(8)]], 32);
+  const bell = lathe([[U(8.6), U(8)], [U(6.5), U(14)], [U(0), U(14)]], 32);
   const fin = (a) => {
     const f = polys([[[U(9), U(18)], [U(24), U(8)], [U(25), U(40)], [U(9.5), U(54)]]]);
     return Manifold.extrude(f, U(3.4), 0, 0, 1, true).rotate([90, 0, 0]).rotate([0, 0, a]);
   };
-  const fins = [90 + 0, 90 + 120, 90 + 240].map((a) => fin(a - 90));
-  const win = union([lathe([[U(0), 0], [U(6.2), 0], [U(6.2), U(2.2)], [U(0), U(2.2)]], 32).rotate([90, 0, 0]).translate([0, -U(9.6), U(55)]),
-    lathe([[U(4.0), 0], [U(6.2), 0], [U(6.2), U(2.8)], [U(4.0), U(2.8)]], 32, 0, false).rotate([90, 0, 0]).translate([0, -U(9.8), U(55)])]);
-  const winCut = lathe([[0, 0], [U(4.0), 0], [U(4.0), U(2)], [0, U(2)]], 32).rotate([90, 0, 0]).translate([0, -U(8.9), U(55)]);
-  const stand = union([foot(s, 0.17), cyl(U(12), U(4), U(4), [0, 0, 0]), lathe([[U(14), U(3)], [U(4), U(10)]], 32)]);
+  const fins = [0, 120, 240].map((a) => fin(a));
+  // porthole: raised ring + domed glass (no cavities, so the solid stays one clean shell)
+  const portY = -U(10.2);
+  const ring = lathe([[U(4.2), 0], [U(6.4), 0], [U(6.4), U(2.2)], [U(4.2), U(2.2)]], 32, 0, false).rotate([90, 0, 0]).translate([0, portY + U(0.6), U(55)]);
+  const glass = ellipsoid(U(4.6), U(2.4), U(4.6), [0, portY - U(0.2), U(55)], 24);
   const stripe = lathe([[U(10.4), U(44)], [U(10.9), U(44)], [U(10.9), U(47)], [U(10.4), U(47)]], 48, 0, false);
-  return union([stand, bell, body.subtract(winCut), win, stripe, ...fins]);
+  const stand = union([foot(s, 0.17), cyl(U(14), U(4), U(4), [0, 0, 0]), lathe([[U(14), U(3)], [U(4.5), U(9)]], 32)]);
+  return union([stand, bell, body, ring, glass, stripe, ...fins]);
 }
 function obelisk(s) {
   const prof = [[0.17 * s, 0], [0.17 * s, 0.05 * s], [0.13 * s, 0.075 * s], [0.13 * s, 0.1 * s], [0.095 * s, 0.11 * s], [0.058 * s, 0.84 * s], [0.0, 0.96 * s]];
@@ -446,12 +462,19 @@ function textTopper(s, p) {
   const cs = textCross(p.font || 'bebas', str, capH, { embolden: p.embolden || 0, align: 'center' });
   if (!cs) return foot(s, 0.12);
   const b = cs.bounds();
-  const w = b.max[0] - b.min[0];
-  const depth = Math.max(capH * 0.22, 3);
-  const letters = standUp(cs, depth).translate([0, 0, s * 0.17 + capH / 2]);
-  const slab = box(w + s * 0.16, depth * 1.4, s * 0.1, [(b.min[0] + b.max[0]) / 2, 0, 0]);
-  const slabTop = box(w + s * 0.08, depth * 1.2, s * 0.05, [(b.min[0] + b.max[0]) / 2, 0, s * 0.1]);
-  return union([slab, slabTop, letters]);
+  const w = b.max[0] - b.min[0], cx = (b.min[0] + b.max[0]) / 2;
+  const depth = Math.max(capH * 0.2, 3);
+  const zBase = s * 0.13;
+  const letters = standUp(cs, depth).translate([0, 0, zBase + capH / 2]);
+  const slab = box(w + s * 0.16, depth * 1.5, s * 0.1, [cx, 0, 0]);
+  const slabTop = box(w + s * 0.08, depth * 1.25, s * 0.05, [cx, 0, s * 0.1]);
+  const parts = [slab, slabTop, letters];
+  if (p.backing !== false) {
+    // a thin panel behind the lettering ties dots, umlauts and separate strokes into the same solid
+    const t = Math.max(1.6, depth * 0.3);
+    parts.push(box(w + s * 0.06, t, capH * 1.08, [cx, depth / 2 - t / 2 + 0.01, zBase - capH * 0.04]));
+  }
+  return union(parts);
 }
 
 export const TOPPERS = [
