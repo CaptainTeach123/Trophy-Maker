@@ -70,7 +70,7 @@ export class Viewer {
 
   /** Draw on demand: zero CPU/GPU while nothing moves. Keeps running only while the camera is settling or spinning. */
   requestRender() {
-    if (this._raf) return;
+    if (this._raf || this._compiling) return;
     this._raf = requestAnimationFrame(() => {
       this._raf = 0;
       this.controls.autoRotate = this.autoRotate;
@@ -128,6 +128,12 @@ export class Viewer {
       this.group.add(mesh);
     }
     this.renderer.shadowMap.needsUpdate = true;
+    if (!this._compiled) {
+      // first model: compile the shaders with the browser's parallel-compile support so the page stays responsive
+      // (falls back to a synchronous compile where the extension is missing)
+      this._compiled = true;
+      this._compiling = this.renderer.compileAsync(this.scene, this.camera).catch(() => {}).then(() => { this._compiling = null; this.requestRender(); });
+    }
     this.requestRender();
   }
 

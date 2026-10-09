@@ -28,6 +28,8 @@ jobs:
         run: node tests/smoke.mjs
       - name: Connectivity test (every design must export as ONE solid — no floating bits, voids or slivers)
         run: node tests/connected.mjs
+      - name: Cache coherence test (incremental builds must equal from-scratch builds)
+        run: node tests/cache.mjs 60
       - name: Random-combination fuzz test
         run: node tests/fuzz.mjs 30
 

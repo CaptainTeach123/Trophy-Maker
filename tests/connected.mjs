@@ -28,7 +28,7 @@ export function problems(state, built) {
     const info = comps.map((c) => { const bb = c.boundingBox(); return { v: c.volume(), z0: bb.min[2], z1: bb.max[2] }; });
     comps.forEach((c) => c.delete()); m.delete();
     info.sort((a, b) => b.v - a.v);
-    const voids = info.filter((c) => c.v < 0);
+    const voids = info.filter((c) => c.v < -1e-6); // float32 rounding after scaling can leave ~1e-9 mm³ dust
     const slivers = info.filter((c) => c.v >= 0 && c.v < 1e-3);
     const solids = info.filter((c) => c.v >= 1e-3);
     const tag = r.bodies.length > 1 ? `[${body.name}] ` : '';

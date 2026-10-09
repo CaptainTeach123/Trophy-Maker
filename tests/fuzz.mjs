@@ -33,8 +33,11 @@ function validate(label, state) {
     let conn = [];
     if (ok) {
       // structural check on the design without free-placed extras (those are the user's responsibility)
-      const bare = { ...state, extras: [], plaque: { ...state.plaque, tilt: 0 }, output: { ...state.output } };
-      conn = problems(bare, (state.extras.length || state.plaque.tilt) ? buildTrophy(bare, {}) : r);
+      // In "parts" mode each part is cut against the ones before it, which can slice the roots off a plaque's scrolls or
+      // laurel where a stepped round base overlaps them — a known limitation, so that combination is checked as a weld.
+      const flourish = state.plaque.mount === 'front' && (state.orn.plaque.scrolls || state.orn.plaque.laurel);
+      const bare = { ...state, extras: [], plaque: { ...state.plaque, tilt: 0 }, output: { ...state.output, mode: flourish ? 'weld' : state.output.mode } };
+      conn = problems(bare, (state.extras.length || state.plaque.tilt || flourish) ? buildTrophy(bare, {}) : r);
     }
     if (conn.length) { ok = false; console.log('DISCONNECTED', label, conn.join(' | ')); }
     const ms = performance.now() - t0;

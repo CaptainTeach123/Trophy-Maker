@@ -1,6 +1,6 @@
 // Assembles a trophy from the UI state into watertight solids.
 import {
-  Manifold, scoped, cached, dropCached, cleanDust, union, box, quality, toMeshData, meshStats, polys, bounds, rad, cyl,
+  Manifold, scoped, cached, dropCached, pruneCached, cleanDust, union, box, quality, toMeshData, meshStats, polys, bounds, rad, cyl,
 } from './kernel.js';
 import { getBase } from './parts/bases.js';
 import { getColumn } from './parts/columns.js';
@@ -67,13 +67,14 @@ export function buildTrophy(state, assets = {}) {
     /* ---- base ---- */
     const bdef = getBase(S.base.style);
     const qk = quality.factor;
-    const base0 = cached('base', JSON.stringify([S.base, S.orn.base, qk]), () => {
+    const baseKey = JSON.stringify([S.base, S.orn.base, qk]);
+    const base0 = cached('base', baseKey, () => {
       const b = bdef.build({ width: S.base.width, depth: bdef.rect ? S.base.depth : S.base.width, height: S.base.height, podiumNumbers: S.orn.base.podiumNumbers });
       return decorateBase(b, S.orn.base);
     });
     const lift = base0.lift || 0;
     const base = { ...base0, halfAt: lift ? (z) => base0.halfAt(z - lift) : base0.halfAt };
-    groups.base.push(base.solid);
+    groups.base.push({ m: base.solid, key: baseKey });
     const baseTopZ = base.top[2];
 
     dbg('base');
@@ -82,8 +83,9 @@ export function buildTrophy(state, assets = {}) {
     const cdef = getColumn(S.column.style);
     if (cdef.build) {
       // built 0.6 mm taller than asked so it overlaps the base and the topper (exact face contact would leave two separate shells)
-      const col = cached('column', JSON.stringify([S.column, S.orn.column, qk]), () => decorateColumn(cdef.build({ height: S.column.height + 0.6, radius: S.column.radius }), S.orn.column));
-      groups.column.push(col.solid.translate([base.top[0], base.top[1], baseTopZ - 0.3]));
+      const colKey = JSON.stringify([S.column, S.orn.column, qk]);
+      const col = cached('column', colKey, () => decorateColumn(cdef.build({ height: S.column.height + 0.6, radius: S.column.radius }), S.orn.column));
+      groups.column.push({ m: col.solid.translate([base.top[0], base.top[1], baseTopZ - 0.3]), key: colKey + JSON.stringify([base.top, baseTopZ]) });
       colTop = baseTopZ + S.column.height;
     } else dropCached('column');
 
@@ -120,7 +122,7 @@ export function buildTrophy(state, assets = {}) {
     } else dropCached('topper');
     if (topperRes) {
       // sink the topper 0.3 mm into whatever it stands on so the weld is a real overlap, not a coplanar touch
-      groups.topper.push(topperRes.solid.translate([base.top[0], base.top[1], colTop - 0.3]));
+      groups.topper.push({ m: topperRes.solid.translate([base.top[0], base.top[1], colTop - 0.3]), key: topperKey + JSON.stringify([base.top, colTop]) });
       topperTop = colTop - 0.3 + topperRes.h;
     }
 
@@ -132,12 +134,19 @@ export function buildTrophy(state, assets = {}) {
     else {
       const sep = PL.mount === 'separate';
       const mnt = sep ? { ...base.mount, curved: null, maxW: Infinity, maxH: Infinity } : base.mount;
-      const pw = Math.max(10, Math.min(PL.width, mnt.maxW));
       const ph = Math.max(6, Math.min(PL.height, mnt.maxH));
+      let pw = Math.max(10, Math.min(PL.width, mnt.maxW));
+      if (mnt.curved) {
+        // on a round base the flourishes at the plate ends must still reach the curved surface
+        const reach = S.orn.plaque.scrolls ? 0.85 * ph : S.orn.plaque.laurel ? 0.34 * ph : 0;
+        const lim = 2 * (0.97 * mnt.curved.a - reach);
+        if (reach && lim >= 10) pw = Math.min(pw, lim);
+      }
       if (pw < PL.width - 0.01 || ph < PL.height - 0.01) warnings.push(`Plaque shrunk to ${pw.toFixed(0)}×${ph.toFixed(0)} mm to fit the base — pick a taller/wider base for a bigger plaque.`);
       // raised text is fused into the plate here (inside the cache entry) whenever the final body is a single welded solid
       const mergeText = !sep && S.output.mode !== 'parts' && !S.output.splitText;
-      const plRes = cached('plaque', JSON.stringify([PL, S.orn.plaque, pw, ph, mnt.curved, qk, mergeText]), () => {
+      const plKey = JSON.stringify([PL, S.orn.plaque, pw, ph, mnt.curved, qk, mergeText]);
+      const plRes = cached('plaque', plKey, () => {
         // built SINK mm thicker and shifted back into the base: the weld is a true overlap, never a coplanar touch
         const plq = buildPlaque({ ...PL, width: pw, height: ph, thickness: PL.thickness + (sep ? 0 : SINK), orn: S.orn.plaque }, { embed: sep ? 0 : mnt.curved ? 5 : 4 });
         const warp = (m) => {
@@ -162,9 +171,10 @@ export function buildTrophy(state, assets = {}) {
         if (text) looseBodies.push({ name: 'plaque-text', group: 'plaqueText', manifold: place2(flat(text)) });
       } else {
         const placed = place(body);
-        groups.plaque.push(placed);
-        if (text) groups.plaqueText.push(place(text));
-        plaqueInfo = { place, pw, ph, t: PL.thickness };
+        const plPlace = plKey + JSON.stringify([mnt.y, mnt.z, mnt.tilt, PL.tilt, SINK]);
+        groups.plaque.push({ m: placed, key: plPlace });
+        if (text) groups.plaqueText.push({ m: place(text), key: plPlace + 'text' });
+        plaqueInfo = { place, pw, ph, t: PL.thickness, key: plPlace };
       }
     }
 
@@ -185,6 +195,7 @@ export function buildTrophy(state, assets = {}) {
         default: return { pos: [0, 0, 0], rotZ: 0, kind: 'top' };
       }
     };
+    const usedExtras = new Set();
     for (const ex of S.extras) {
       const an = anchorFor(ex.anchor);
       if (an.plaque && !plaqueInfo) { warnings.push('An extra is anchored to the plaque, but there is no mounted plaque.'); continue; }
@@ -199,47 +210,55 @@ export function buildTrophy(state, assets = {}) {
         }
         return r.rotate([0, 0, an.rotZ]).translate(an.pos);
       };
-      if (ex.type === 'text') {
-        const cs = textCross(ex.font, ex.text || ' ', ex.size, { embolden: ex.embolden || 0, align: ex.align || 'center' });
-        if (!cs) continue;
-        const depth = Math.max(0.2, ex.depth);
-        const engrave = ex.mode === 'engrave';
-        let m;
-        if (ex.orient === 'flat' || an.kind === 'top' && ex.orient !== 'upright') {
-          m = engrave ? Manifold.extrude(cs, depth + 0.6, 0, 0, 1).translate([0, 0, -depth]) : Manifold.extrude(cs, depth + 0.4, 0, 0, 1).translate([0, 0, -0.4]);
-        } else {
-          const e = engrave ? Manifold.extrude(cs, depth + 0.6, 0, 0, 1).translate([0, 0, -depth]) : Manifold.extrude(cs, depth + 0.4, 0, 0, 1).translate([0, 0, -0.4]);
-          m = e.rotate([90, 0, 0]);
-        }
-        if (ex.rz) m = m.rotate([0, 0, ex.rz]);
-        solid = placeLocal(m);
-      } else if (ex.type === 'stl') {
-        const a = assets[ex.assetId];
-        if (!a) { warnings.push('An STL extra has no file loaded.'); continue; }
-        const k = (ex.scale || 100) / 100;
-        const sit = an.kind === 'top' || ex.anchor === 'floor';
-        if (a.manifold) {
-          let m = a.manifold.rotate([ex.rx || 0, ex.ry || 0, ex.rz || 0]);
-          if (ex.fitHeight > 0) { const bb = bounds(m); m = m.scale(ex.fitHeight / (Math.max(...bb.size) || 1)); } else m = m.scale(k);
-          const b = bounds(m);
-          m = m.translate([-(b.min[0] + b.max[0]) / 2, -(b.min[1] + b.max[1]) / 2, sit ? -b.min[2] - 0.2 : -(b.min[2] + b.max[2]) / 2]);
-          if (!sit) m = m.rotate([90, 0, 0]); // face-mounted: stand it up on the surface
-          solid = placeLocal(m);
-        } else {
-          warnings.push(a.reason || 'An uploaded STL is not watertight; it is exported as a separate unwelded shell.');
+      let asset = null;
+      if (ex.type === 'stl') {
+        asset = assets[ex.assetId];
+        if (!asset) { warnings.push('An STL extra has no file loaded.'); continue; }
+        if (!asset.manifold) {
+          // not watertight: transformed as raw triangles and exported as its own shell
+          warnings.push(asset.reason || 'An uploaded STL is not watertight; it is exported as a separate unwelded shell.');
+          const k = (ex.scale || 100) / 100;
+          const sit = an.kind === 'top' || ex.anchor === 'floor';
           let sc = k;
-          if (ex.fitHeight > 0) {
-            sc = ex.fitHeight / (soupExtent(transformSoup(a.soup, { rot: [ex.rx || 0, ex.ry || 0, ex.rz || 0] })) || 1);
-          }
-          soupBody = transformSoup(a.soup, { scale: sc, rot: [ex.rx || 0, ex.ry || 0, ex.rz || 0], anchorRot: an.rotZ, offset: [an.pos[0] + (ex.ox || 0), an.pos[1] + (ex.oy || 0), an.pos[2] + (ex.oz || 0)], sit });
+          if (ex.fitHeight > 0) sc = ex.fitHeight / (soupExtent(transformSoup(asset.soup, { rot: [ex.rx || 0, ex.ry || 0, ex.rz || 0] })) || 1);
+          soupBody = transformSoup(asset.soup, { scale: sc, rot: [ex.rx || 0, ex.ry || 0, ex.rz || 0], anchorRot: an.rotZ, offset: [an.pos[0] + (ex.ox || 0), an.pos[1] + (ex.oy || 0), an.pos[2] + (ex.oz || 0)], sit });
         }
+      }
+      if (!soupBody) {
+        // each extra's placed solid is cached on everything that can change it, so unrelated edits skip the work
+        const exKey = JSON.stringify([ex, an.pos, an.rotZ, an.kind, an.plaque ? plaqueInfo.key : 0, qk, asset ? asset.rev : 0]);
+        usedExtras.add('ex:' + ex.id);
+        const built = cached('ex:' + ex.id, exKey, () => {
+          let m = null;
+          if (ex.type === 'text') {
+            const cs = textCross(ex.font, ex.text || ' ', ex.size, { embolden: ex.embolden || 0, align: ex.align || 'center' });
+            if (!cs) return { solid: null };
+            const depth = Math.max(0.2, ex.depth);
+            const engrave = ex.mode === 'engrave';
+            const e = engrave ? Manifold.extrude(cs, depth + 0.6, 0, 0, 1).translate([0, 0, -depth]) : Manifold.extrude(cs, depth + 0.4, 0, 0, 1).translate([0, 0, -0.4]);
+            m = (ex.orient === 'flat' || (an.kind === 'top' && ex.orient !== 'upright')) ? e : e.rotate([90, 0, 0]);
+            if (ex.rz) m = m.rotate([0, 0, ex.rz]);
+          } else {
+            const k = (ex.scale || 100) / 100;
+            const sit = an.kind === 'top' || ex.anchor === 'floor';
+            m = asset.manifold.rotate([ex.rx || 0, ex.ry || 0, ex.rz || 0]);
+            if (ex.fitHeight > 0) { const bb = bounds(m); m = m.scale(ex.fitHeight / (Math.max(...bb.size) || 1)); } else m = m.scale(k);
+            const b = bounds(m);
+            m = m.translate([-(b.min[0] + b.max[0]) / 2, -(b.min[1] + b.max[1]) / 2, sit ? -b.min[2] - 0.2 : -(b.min[2] + b.max[2]) / 2]);
+            if (!sit) m = m.rotate([90, 0, 0]); // face-mounted: stand it up on the surface
+          }
+          return { solid: placeLocal(m) };
+        });
+        solid = built.solid;
       }
       if (soupBody) { looseBodies.push({ name: 'extra-stl', group: 'extra', soup: soupBody }); continue; }
       if (!solid) continue;
-      if (ex.mode === 'engrave') engraves[group].push(solid);
+      const exMemberKey = 'ex:' + ex.id + JSON.stringify([ex.mode, ex.anchor, an.pos, an.rotZ]) + (an.plaque ? plaqueInfo.key : '') + JSON.stringify(ex) + (asset ? asset.rev : '');
+      if (ex.mode === 'engrave') engraves[group].push({ m: solid, key: exMemberKey });
       else if (ex.mode === 'separate') looseBodies.push({ name: ex.type === 'text' ? 'text-' + (ex.text || '').slice(0, 12) : 'stl-' + ex.id, group: 'extra', manifold: solid });
-      else groups[group].push(solid);
+      else groups[group].push({ m: solid, key: exMemberKey });
     }
+    pruneCached('ex:', usedExtras);
 
     dbg('extras');
     const usesStl = S.topper.style === 'stl' || S.extras.some((e) => e.type === 'stl');
@@ -253,11 +272,17 @@ export function buildTrophy(state, assets = {}) {
         : { minSolid: 5, minVoid: 2 }; // our own geometry: floating bits under ~1.7 mm cubed can never print
       bodies.push({ name, group, manifold: cleanDust(m, dust) });
     };
+    const groupKey = (g) => JSON.stringify([groups[g].map((i) => i.key), (engraves[g] || []).map((i) => i.key)]);
     const groupSolid = (g) => {
-      if (!groups[g].length) return null;
-      let m = union(groups[g]);
-      if (engraves[g] && engraves[g].length) m = m.subtract(union(engraves[g]));
-      return m;
+      if (!groups[g].length) { dropCached('grp:' + g); return null; }
+      const eng = engraves[g] || [];
+      if (groups[g].length === 1 && !eng.length) { dropCached('grp:' + g); return groups[g][0].m; }
+      // the union of a group (e.g. base + its extras) is cached on its members, so an edit elsewhere skips it
+      return cached('grp:' + g, groupKey(g), () => {
+        let m = union(groups[g].map((i) => i.m));
+        if (eng.length) m = m.subtract(union(eng.map((i) => i.m)));
+        return { solid: m };
+      }).solid;
     };
 
     if (S.output.mode === 'parts') {
@@ -271,7 +296,12 @@ export function buildTrophy(state, assets = {}) {
         acc = acc ? acc.add(m) : m;
       }
     } else {
-      const solids = ['base', 'column', 'topper', 'plaque'].map(groupSolid).filter(Boolean);
+      // everything below the topper is cached as one solid, so dragging the topper size only unions two things
+      const lowerParts = ['base', 'column', 'plaque'].map(groupSolid).filter(Boolean);
+      const lower = lowerParts.length > 1
+        ? cached('lower', JSON.stringify(['base', 'column', 'plaque'].map(groupKey)), () => ({ solid: union(lowerParts) })).solid
+        : (dropCached('lower'), lowerParts[0] || null);
+      const solids = [lower, groupSolid('topper')].filter(Boolean);
       let whole = solids.length ? union(solids) : null;
       const txt = groupSolid('plaqueText');
       if (txt) {

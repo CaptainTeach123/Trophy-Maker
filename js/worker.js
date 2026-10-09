@@ -84,3 +84,5 @@ self.onmessage = async (e) => {
     self.postMessage({ rid, ok: false, error: String(err && err.message ? err.message : err) });
   }
 };
+
+self.postMessage({ hello: true, bootMs }); // everything is loaded: the page may start sending requests

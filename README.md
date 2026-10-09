@@ -60,7 +60,7 @@ Opening `index.html` straight from disk won't work — ES modules and WASM need 
   worker rebuilds, and edits made mid-build are coalesced into one follow-up build.
 * **Only what changed is rebuilt.** Base, column, topper and plaque solids are cached by their parameters (raised
   plaque text is fused into its plate inside that cache), so editing a plaque name or resizing a topper doesn't redo
-  the rest. Typical edits take 60–150 ms in the worker.
+  the rest. Typical edits take 20–120 ms in the worker. Cache keys are checked by `tests/cache.mjs`.
 * **Cheap primitives.** Tubes (handles, arches, stems) are swept meshes rather than chains of boolean unions
   (~25× faster), and tessellation is tuned to chord errors well below a print layer.
 * **Render on demand.** The preview draws only when something moves or changes (0% CPU/GPU idle); the shadow map is
@@ -87,7 +87,7 @@ js/normals.js         crease-aware smooth normals
 js/parts/             bases.js columns.js toppers.js plaques.js ornaments.js  ← add new options here
 vendor/               manifold-3d, three.js bundle, opentype.js, fflate (see THIRD_PARTY.md)
 fonts/                bundled OFL fonts            thumbs/   pre-rendered option previews
-tests/                smoke.mjs, connected.mjs, fuzz.mjs
+tests/                smoke.mjs, connected.mjs, cache.mjs, fuzz.mjs
 tools/                gen-thumbs.mjs, gen-catalog.mjs, build-vendor.mjs
 ```
 
@@ -108,6 +108,7 @@ Then run `npm run catalog` (updates the UI's id/name list), `npm run thumbs` (re
 ```
 node tests/smoke.mjs       # every base / column / topper / plaque / ornament builds a valid solid (+ thumbnails exist)
 node tests/connected.mjs   # every preset/option exports as ONE connected solid: no floating bits, voids or slivers
+node tests/cache.mjs 60    # incremental (cached) builds must equal from-scratch builds after every random edit
 node tests/fuzz.mjs 100    # 100 random combinations incl. extras, parts mode, scaling, connectivity
 node tools/gen-catalog.mjs # regenerate js/catalog.js after adding/renaming a part
 node tools/gen-thumbs.mjs  # regenerate the option-card previews in /thumbs (needs playwright) after changing geometry

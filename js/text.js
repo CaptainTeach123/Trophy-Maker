@@ -68,7 +68,7 @@ export function textPolygons(fontId, str, size, spacing = 0) {
   });
   const path = { commands };
   // adaptive curve flattening: chord error stays below ~0.03 mm whatever the letter size
-  const tol = 0.04 / quality.factor;
+  const tol = 0.07 / quality.factor;
   const stepsFor = (ctrlLen) => Math.max(2, Math.min(12, Math.ceil(0.55 * Math.sqrt(ctrlLen / 1.57 / tol))));
   const contours = [];
   let cur = null, cx = 0, cy = 0;
@@ -122,7 +122,7 @@ export function textCross(fontId, str, size, { align = 'center', spacing = 0, em
   if (!str || !str.trim()) return null;
   let contours = textPolygons(fontId, str, size, spacing);
   if (!contours.length) return null;
-  let cs = polys(contours);
+  let cs = polys(contours).simplify(0.004);
   if (embolden > 0.001) cs = cs.offset(embolden, 'Round', 2, 6);
   let b = cs.bounds();
   const w = b.max[0] - b.min[0];

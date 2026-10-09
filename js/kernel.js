@@ -123,6 +123,10 @@ export function cached(name, key, fn) {
   return value;
 }
 export function dropCached(name) { const h = groupCache.get(name); if (h) { disposeValue(h.value); groupCache.delete(name); } }
+/** drop every cache entry whose name starts with `prefix` and is not in `keep` (e.g. extras that were deleted) */
+export function pruneCached(prefix, keep) {
+  for (const name of [...groupCache.keys()]) if (name.startsWith(prefix) && !keep.has(name)) dropCached(name);
+}
 export function clearCache() { for (const h of groupCache.values()) disposeValue(h.value); groupCache.clear(); }
 
 /* ------------------------------------------------------------------ */

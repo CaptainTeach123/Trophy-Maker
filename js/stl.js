@@ -37,37 +37,47 @@ export function stlToManifold(soup) {
     min[k] = Math.min(min[k], soup[i + k]); max[k] = Math.max(max[k], soup[i + k]);
   }
   const diag = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
-  const eps = diag * 1e-6;
-  const index = new Map();
-  const verts = [];
-  const tris = [];
+  const inv = 1 / (diag * 1e-6); // vertices closer than ~1e-6 of the model size are the same vertex
+  // open-addressing hash table over quantised integer coordinates (several times faster than string keys)
+  const nCorners = soup.length / 3;
+  let cap = 1; while (cap < nCorners * 2) cap <<= 1;
+  const table = new Int32Array(cap).fill(-1); // slot -> vertex index
+  const q = new Int32Array(nCorners * 3);     // quantised coordinates per vertex index
+  const verts = new Float32Array(nCorners * 3);
+  let nv = 0;
   const vid = (x, y, z) => {
-    const key = Math.round(x / eps) + ',' + Math.round(y / eps) + ',' + Math.round(z / eps);
-    let id = index.get(key);
-    if (id === undefined) { id = verts.length / 3; index.set(key, id); verts.push(x, y, z); }
-    return id;
+    const ix = Math.round((x - min[0]) * inv) | 0, iy = Math.round((y - min[1]) * inv) | 0, iz = Math.round((z - min[2]) * inv) | 0;
+    let h = (Math.imul(ix, 73856093) ^ Math.imul(iy, 19349663) ^ Math.imul(iz, 83492791)) & (cap - 1);
+    for (;;) {
+      const v = table[h];
+      if (v === -1) { table[h] = nv; q[nv * 3] = ix; q[nv * 3 + 1] = iy; q[nv * 3 + 2] = iz; verts[nv * 3] = x; verts[nv * 3 + 1] = y; verts[nv * 3 + 2] = z; return nv++; }
+      if (q[v * 3] === ix && q[v * 3 + 1] === iy && q[v * 3 + 2] === iz) return v;
+      h = (h + 1) & (cap - 1);
+    }
   };
+  const tris = new Uint32Array(nCorners);
+  let nt = 0;
   for (let i = 0; i < soup.length; i += 9) {
     const a = vid(soup[i], soup[i + 1], soup[i + 2]);
     const b = vid(soup[i + 3], soup[i + 4], soup[i + 5]);
     const c = vid(soup[i + 6], soup[i + 7], soup[i + 8]);
-    if (a !== b && b !== c && a !== c) tris.push(a, b, c);
+    if (a !== b && b !== c && a !== c) { tris[nt++] = a; tris[nt++] = b; tris[nt++] = c; }
   }
-  const attempt = (triList) => {
+  const vertList = verts.subarray(0, nv * 3), triList = tris.subarray(0, nt);
+  const attempt = (list, merge) => {
     try {
-      const mesh = new MeshCtor({ numProp: 3, vertProperties: Float32Array.from(verts), triVerts: Uint32Array.from(triList) });
-      mesh.merge();
+      const mesh = new MeshCtor({ numProp: 3, vertProperties: vertList, triVerts: list });
+      if (merge) mesh.merge(); // best-effort stitching of open seams; skipped when the welded mesh is already closed
       const m = Manifold.ofMesh(mesh);
-      if (m.status() !== 'NoError' || m.isEmpty()) { m.delete(); return null; }
-      if (m.volume() < 0) { m.delete(); return null; }
+      if (m.status() !== 'NoError' || m.isEmpty() || m.volume() < 0) { m.delete(); return null; }
       return m;
     } catch (e) { return null; }
   };
-  let m = attempt(tris);
+  let m = attempt(triList, false) || attempt(triList, true);
   if (!m) {
-    const flipped = [];
-    for (let i = 0; i < tris.length; i += 3) flipped.push(tris[i], tris[i + 2], tris[i + 1]);
-    m = attempt(flipped);
+    const flipped = new Uint32Array(nt);
+    for (let i = 0; i < nt; i += 3) { flipped[i] = triList[i]; flipped[i + 1] = triList[i + 2]; flipped[i + 2] = triList[i + 1]; }
+    m = attempt(flipped, false) || attempt(flipped, true);
   }
   if (m) return { manifold: m, soup, reason: null };
   return { manifold: null, soup, reason: 'This STL is not watertight (open holes or non-manifold edges), so it cannot be welded. It will still be exported as its own separate shell.' };
