@@ -9,6 +9,7 @@ import { COLUMNS } from '../js/parts/columns.js';
 import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
 import { PRESETS } from '../js/presets.js';
+import { catalogSource } from '../tools/gen-catalog.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 setFontLoader(async (f) => { const b = fs.readFileSync(path.join(dir, '../fonts', f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); });
@@ -39,6 +40,12 @@ if (!only || only === 'orn') {
   Object.assign(s.orn.topper, { wings: true, halo: true });
   Object.assign(s.orn.plaque, { border: true, doubleBorder: true, studs: true, scrolls: true, laurel: true });
   check('all ornaments', s);
+}
+// the UI's id/name catalogue must match the real part lists (regenerate with `node tools/gen-catalog.mjs`)
+if (!only) {
+  const same = fs.readFileSync(path.join(dir, '../js/catalog.js'), 'utf8') === catalogSource();
+  console.log(same ? 'ok   js/catalog.js is up to date' : 'STALE js/catalog.js — run: node tools/gen-catalog.mjs');
+  if (!same) fails++;
 }
 // every option card needs a pre-rendered thumbnail (run `node tools/gen-thumbs.mjs` after adding parts)
 if (!only) {

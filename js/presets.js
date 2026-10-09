@@ -1,5 +1,5 @@
 // Ready-made trophy recipes: each is a patch applied on top of the default state.
-import { defaultState } from './builder.js';
+import { defaultState } from './state.js';
 
 const merge = (target, patch) => {
   for (const [k, v] of Object.entries(patch)) {

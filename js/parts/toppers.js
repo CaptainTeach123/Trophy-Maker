@@ -1,7 +1,7 @@
 // Trophy toppers. build(s, p) -> Manifold standing on z=0, centered on x=y=0, facing -Y (front).
 //   s = overall height in mm.  p = { text, font, embolden, stl: {manifold, ...}, ... }
 import {
-  Manifold, lathe, polyLathe, polys, union, cyl, ball, ellipsoid, box, tube, segs, rad, starPoly, regularPoly,
+  Manifold, lathe, polyLathe, polys, union, cyl, ball, ellipsoid, box, tube, tubeJoined, segs, rad, starPoly, regularPoly,
   bevelSolid, standUp, stroke2d, polarArray, hullOf, bounds,
 } from '../kernel.js';
 import { textCross } from '../text.js';
@@ -39,7 +39,7 @@ function chalice(s, o = {}) {
   const parts = [lathe(stemPts, segs(footR, 32))];
   const z0 = stemTop * s, z1 = (o.top ?? 0.9) * s, wall = 0.016 * s, r0 = 0.04 * s;
   const rOut = (t) => r0 + (R - r0) * Math.pow(Math.sin((t * Math.PI) / 2), o.curve ?? 0.7);
-  const N = 28;
+  const N = 20;
   const O = [], I = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
@@ -147,7 +147,7 @@ function soccer(s) {
   const R = (s - zBase) / 2;
   const zc = zBase + R * 0.98;
   const poly = Manifold.hull(truncatedIcosahedron(R));
-  const rounded = poly.intersect(Manifold.sphere(R * 0.975, 64));
+  const rounded = poly.intersect(Manifold.sphere(R * 0.975, 48));
   // pentagon inlays: shallow grooves around each pentagonal face give the classic panel look
   return union([ballStand(s, zc, R), rounded.translate([0, 0, zc])]);
 }
@@ -174,13 +174,13 @@ function golfBall(s) {
   const zBase = 0.14 * s;
   const R = (s - zBase) / 2;
   const zc = zBase + R * 0.9;
-  const N = 110;
+  const N = 90;
   const dimples = [];
   const dr = R * 0.105;
   for (let i = 0; i < N; i++) {
     const y = 1 - (i / (N - 1)) * 2, rr = Math.sqrt(1 - y * y), th = i * Math.PI * (3 - Math.sqrt(5));
     const dir = [Math.cos(th) * rr, y, Math.sin(th) * rr];
-    dimples.push(ball(dr, dir.map((c) => c * (R + dr * 0.55)), 10));
+    dimples.push(ball(dr, dir.map((c) => c * (R + dr * 0.55)), 8));
   }
   const sph = Manifold.sphere(R, segs(R, 48)).subtract(union(dimples));
   const tee = union([foot(s, 0.12), Manifold.cylinder(zc - R * 0.8, 0.06 * s, 0.025 * s, 32, false)]);
@@ -244,7 +244,7 @@ function laurelBranch(Rw, s, count = 11, fromDeg = -78, toDeg = 82, withStem = t
       const cx = Math.cos(rad(th0)) * rr, cz = Math.sin(rad(th0)) * rr;
       const dirx = Math.cos(rad(psi)), dirz = Math.sin(rad(psi));
       const L = len * lscale;
-      parts.push(ellipsoid(L / 2, th / 2, wid / 2 * lscale, [0, 0, 0], 16).rotate([0, -psi, 0]).translate([cx + dirx * L * 0.42, 0, cz + dirz * L * 0.42]));
+      parts.push(ellipsoid(L / 2, th / 2, wid / 2 * lscale, [0, 0, 0], 12).rotate([0, -psi, 0]).translate([cx + dirx * L * 0.42, 0, cz + dirz * L * 0.42]));
     }
   }
   if (withStem) {
@@ -323,8 +323,8 @@ function figure(s) {
   const parts = [];
   parts.push(foot(s, 0.17));
   // legs
-  parts.push(tube([[U(-5), 0, U(46)], [U(-8), 0, U(26)], [U(-9), 0, U(9)]], [U(5.5), U(4.2), U(3.8)], 12));
-  parts.push(tube([[U(5), 0, U(46)], [U(8), 0, U(26)], [U(9), 0, U(9)]], [U(5.5), U(4.2), U(3.8)], 12));
+  parts.push(tubeJoined([[U(-5), 0, U(46)], [U(-8), 0, U(26)], [U(-9), 0, U(9)]], [U(5.5), U(4.2), U(3.8)], 12));
+  parts.push(tubeJoined([[U(5), 0, U(46)], [U(8), 0, U(26)], [U(9), 0, U(9)]], [U(5.5), U(4.2), U(3.8)], 12));
   parts.push(ellipsoid(U(6), U(8), U(3), [U(-9), U(-3), U(5)], 12), ellipsoid(U(6), U(8), U(3), [U(9), U(-3), U(5)], 12));
   parts.push(cyl(U(12), U(18), U(18), [0, 0, 0]));
   // torso
@@ -332,8 +332,8 @@ function figure(s) {
   // head + neck
   parts.push(cyl(U(12), U(3.6), U(3.6), [0, 0, U(68)], 12), ball(U(8), [0, 0, U(84)], 28));
   // raised arms
-  parts.push(tube([[U(12), 0, U(70)], [U(22), 0, U(80)], [U(30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
-  parts.push(tube([[U(-12), 0, U(70)], [U(-22), 0, U(80)], [U(-30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
+  parts.push(tubeJoined([[U(12), 0, U(70)], [U(22), 0, U(80)], [U(30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
+  parts.push(tubeJoined([[U(-12), 0, U(70)], [U(-22), 0, U(80)], [U(-30), 0, U(94)]], [U(4.2), U(3.4), U(3.2)], 12));
   parts.push(ball(U(4.2), [U(30), 0, U(95.5)], 14), ball(U(4.2), [U(-30), 0, U(95.5)], 14));
   return union(parts);
 }

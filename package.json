@@ -8,6 +8,13 @@
   "scripts": {
     "start": "python3 -m http.server 8000",
     "test": "node tests/smoke.mjs && node tests/connected.mjs && node tests/fuzz.mjs 40",
-    "thumbs": "node tools/gen-thumbs.mjs"
+    "catalog": "node tools/gen-catalog.mjs",
+    "thumbs": "node tools/gen-thumbs.mjs",
+    "build:vendor": "node tools/build-vendor.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "^0.186.0",
+    "playwright": "^1.56.0"
   }
 }

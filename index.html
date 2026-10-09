@@ -7,8 +7,11 @@
   <meta name="description" content="Mix and match bases, columns, toppers and plaques, add your own text, fonts and STL files, weld on ornate details and download a clean, watertight trophy STL.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%8F%86%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
+  <!-- the page's own module graph is requested up-front (the worker starts from inline script below) -->
+  <link rel="modulepreload" href="js/main.js">
+  <link rel="modulepreload" href="vendor/three/three.bundle.js">
   <script type="importmap">
-    { "imports": { "three": "./vendor/three/three.module.js" } }
+    { "imports": { "three": "./vendor/three/three.bundle.js" } }
   </script>
 </head>
 <body>
@@ -51,6 +54,7 @@
   <div id="fatal" role="alert"><div><h2>Trophy Maker can't start</h2><p id="fatalMsg"></p></div></div>
   <noscript>Trophy Maker needs JavaScript and WebAssembly.</noscript>
   <script>
+    try { window.__earlyWorker = new Worker('js/worker.js', { type: 'module' }); } catch (e) { /* engine.js reports the failure */ }
     window.__fatal = function (msg) { document.getElementById('fatalMsg').textContent = msg; document.getElementById('fatal').classList.add('on'); };
     window.addEventListener('error', function (e) { if (!window.app) window.__fatal('Something went wrong while loading: ' + (e.message || 'unknown error') + '. Please use a current Chrome, Edge, Firefox or Safari (WebAssembly and WebGL are required).'); });
     window.addEventListener('unhandledrejection', function (e) { if (!window.app) window.__fatal('Something went wrong while loading: ' + ((e.reason && e.reason.message) || e.reason) + '. Please use a current Chrome, Edge, Firefox or Safari (WebAssembly and WebGL are required).'); });

@@ -38,7 +38,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .panel { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
 
 /* ---------- stage overlays ---------- */
-.viewbar, .matbar { position: absolute; display: flex; align-items: center; gap: 4px; background: #14171dcc; backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.viewbar, .matbar { position: absolute; display: flex; align-items: center; gap: 4px; background: #14171de6; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
 .viewbar { top: 12px; left: 12px; }
 .matbar { top: 12px; right: 12px; }
 .viewbar button, .matbar button { background: transparent; border: 0; border-radius: 7px; padding: 5px 9px; color: var(--muted); font-size: 12.5px; }
@@ -49,7 +49,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .matbar .dot.on { border-color: #fff; background-clip: padding-box; }
 .statusbar { position: absolute; left: 12px; bottom: 12px; right: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); pointer-events: none; }
 .statusbar > * { pointer-events: auto; }
-.chip { background: #14171dcc; backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; color: var(--text); white-space: nowrap; }
+.chip { background: #14171de6; border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; color: var(--text); white-space: nowrap; }
 .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip b { font-weight: 600; }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #ffffff30; border-top-color: var(--gold); animation: spin .7s linear infinite; display: none; }
 .busy .spinner { display: inline-block; }

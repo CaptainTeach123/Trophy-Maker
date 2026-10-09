@@ -1,30 +1,11 @@
 // Font registry + text -> 2D outline conversion (opentype.js)
-import * as opentype from '../vendor/opentype/opentype.mjs';
+import * as opentype from '../vendor/opentype/opentype.min.mjs';
 import { polys, quality } from './kernel.js';
 
-export const BUILTIN_FONTS = [
-  { id: 'cinzel', name: 'Cinzel Bold — Roman capitals', file: 'Cinzel_700Bold.ttf' },
-  { id: 'cinzelDeco', name: 'Cinzel Decorative — ornate caps', file: 'CinzelDecorative_700Bold.ttf' },
-  { id: 'playfair', name: 'Playfair Display Bold — classic serif', file: 'PlayfairDisplay_700Bold.ttf' },
-  { id: 'abril', name: 'Abril Fatface — fat didone', file: 'AbrilFatface_400Regular.ttf' },
-  { id: 'robotoSlab', name: 'Roboto Slab Bold — slab serif', file: 'RobotoSlab_700Bold.ttf' },
-  { id: 'alfa', name: 'Alfa Slab One — heavy slab', file: 'AlfaSlabOne_400Regular.ttf' },
-  { id: 'oswald', name: 'Oswald Bold — condensed sans', file: 'Oswald_700Bold.ttf' },
-  { id: 'bebas', name: 'Bebas Neue — sports caps', file: 'BebasNeue_400Regular.ttf' },
-  { id: 'anton', name: 'Anton — heavy condensed', file: 'Anton_400Regular.ttf' },
-  { id: 'bungee', name: 'Bungee — block display', file: 'Bungee_400Regular.ttf' },
-  { id: 'russo', name: 'Russo One — modern sports', file: 'RussoOne_400Regular.ttf' },
-  { id: 'orbitron', name: 'Orbitron Bold — sci-fi', file: 'Orbitron_700Bold.ttf' },
-  { id: 'blackops', name: 'Black Ops One — stencil', file: 'BlackOpsOne_400Regular.ttf' },
-  { id: 'rye', name: 'Rye — western', file: 'Rye_400Regular.ttf' },
-  { id: 'fraktur', name: 'UnifrakturCook — blackletter', file: 'UnifrakturCook_700Bold.ttf' },
-  { id: 'greatVibes', name: 'Great Vibes — formal script', file: 'GreatVibes_400Regular.ttf' },
-  { id: 'pacifico', name: 'Pacifico — casual script', file: 'Pacifico_400Regular.ttf' },
-  { id: 'lobster', name: 'Lobster — bold script', file: 'Lobster_400Regular.ttf' },
-];
+import { BUILTIN_FONTS } from './fonts-meta.js';
+export { BUILTIN_FONTS };
 
 const fontCache = new Map(); // id -> opentype Font
-const customFonts = []; // {id, name}
 let fontLoader = async (file) => {
   const res = await fetch(new URL(`../fonts/${file}`, import.meta.url));
   if (!res.ok) throw new Error('font fetch failed: ' + file);
@@ -32,10 +13,6 @@ let fontLoader = async (file) => {
 };
 /** Tests (node) can swap the loader. */
 export function setFontLoader(fn) { fontLoader = fn; }
-
-export function listFonts() {
-  return [...BUILTIN_FONTS, ...customFonts];
-}
 
 export async function loadFont(id) {
   if (fontCache.has(id)) return fontCache.get(id);
@@ -47,11 +24,9 @@ export async function loadFont(id) {
   return font;
 }
 
-export function registerCustomFont(name, arrayBuffer) {
-  const font = opentype.parse(arrayBuffer);
-  const id = 'custom:' + name + ':' + customFonts.length;
-  fontCache.set(id, font);
-  customFonts.push({ id, name: name + ' (uploaded)' });
+/** Parse an uploaded font and make it available under `id` (the UI chose the id). */
+export function registerCustomFont(id, arrayBuffer) {
+  fontCache.set(id, opentype.parse(arrayBuffer));
   return id;
 }
 
@@ -93,7 +68,7 @@ export function textPolygons(fontId, str, size, spacing = 0) {
   });
   const path = { commands };
   // adaptive curve flattening: chord error stays below ~0.03 mm whatever the letter size
-  const tol = 0.03 / quality.factor;
+  const tol = 0.04 / quality.factor;
   const stepsFor = (ctrlLen) => Math.max(2, Math.min(12, Math.ceil(0.55 * Math.sqrt(ctrlLen / 1.57 / tol))));
   const contours = [];
   let cur = null, cx = 0, cy = 0;

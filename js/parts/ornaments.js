@@ -113,11 +113,11 @@ export function decorateBase(base, o) {
 
   if (o.beadsTop) {
     const r = o.beadSize;
-    for (const { p } of edgePoints(base.topPoly, o.beadSpacing, r * 1.0)) parts.push(ball(r, [p[0], p[1], topZ + r * 0.25], 12));
+    for (const { p } of edgePoints(base.topPoly, o.beadSpacing, r * 1.0)) parts.push(ball(r, [p[0], p[1], topZ + r * 0.25], r > 2.5 ? 10 : 8));
   }
   if (o.beadsFoot) {
     const r = o.beadSize;
-    for (const { p } of edgePoints(base.footPoly, o.beadSpacing, r * 0.15)) parts.push(ball(r, [p[0], p[1], r * 0.8], 12));
+    for (const { p } of edgePoints(base.footPoly, o.beadSpacing, r * 0.15)) parts.push(ball(r, [p[0], p[1], r * 0.8], r > 2.5 ? 10 : 8));
   }
   if (o.finials) {
     const f = o.finialSize;

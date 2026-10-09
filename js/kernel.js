@@ -131,7 +131,7 @@ export function clearCache() { for (const h of groupCache.values()) disposeValue
 export const quality = { factor: 1 };
 /** Number of segments for a circle of radius r (mm) — multiple of 4 for clean geometry. */
 export function segs(r, min = 16) {
-  const n = Math.max(min, Math.min(160, Math.ceil(Math.sqrt(Math.max(r, 0.5)) * 11 * quality.factor)));
+  const n = Math.max(min, Math.min(160, Math.ceil(Math.sqrt(Math.max(r, 0.5)) * 9 * quality.factor)));
   return Math.ceil(n / 4) * 4;
 }
 
@@ -190,8 +190,69 @@ export function union(list) {
 }
 export function hullOf(list) { return Manifold.hull(list); }
 
-/** Rounded tube/capsule chain along 3D points with per-point radius. */
+/**
+ * Swept tube along 3D points with per-point radius and rounded ends, built directly as one mesh (no booleans), which is
+ * ~50x cheaper than unioning capsules. Frames are parallel-transported, so there is no twisting. Meant for gentle
+ * paths (radius well below the bend radius); use `tubeJoined` for tight corners.
+ */
 export function tube(points, radii, n) {
+  const rad_ = (i) => (Array.isArray(radii) ? radii[i] : radii);
+  // drop repeated points
+  const P = [], R = [];
+  points.forEach((p, i) => { const q = P[P.length - 1]; if (!q || Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) > 1e-6) { P.push(p); R.push(rad_(i)); } });
+  if (P.length < 2) return ball(R[0] || 1, P[0] || [0, 0, 0]);
+  const seg = n ? Math.max(6, Math.ceil(n / 2) * 2) : Math.max(8, Math.min(16, segs(Math.max(...R), 8)));
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const norm = (v) => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const T = P.map((_, i) => norm(sub(P[Math.min(i + 1, P.length - 1)], P[Math.max(i - 1, 0)])));
+  // parallel transport of the cross-section frame
+  let N0 = Math.abs(T[0][2]) < 0.9 ? cross(T[0], [0, 0, 1]) : cross(T[0], [1, 0, 0]);
+  N0 = norm(N0);
+  const frames = [];
+  let N = N0;
+  for (let i = 0; i < P.length; i++) {
+    N = norm(sub(N, T[i].map((c) => c * dot(N, T[i]))));
+    frames.push([N, cross(T[i], N)]);
+  }
+  // rings: hemispherical cap rings at both ends (two per end), then the path rings
+  const rings = []; // { c, r, N, B }
+  const capAngles = [Math.PI / 3, Math.PI / 6]; // from the tube axis ring outwards
+  for (const phi of [...capAngles].reverse()) { // start cap, apex-most first
+    const k = Math.PI / 2 - phi; // distance along the axis in units of r: sin(k)
+    rings.push({ c: P[0].map((v, d) => v - T[0][d] * R[0] * Math.sin(k)), r: R[0] * Math.cos(k), N: frames[0][0], B: frames[0][1] });
+  }
+  P.forEach((p, i) => rings.push({ c: p, r: R[i], N: frames[i][0], B: frames[i][1] }));
+  const last = P.length - 1;
+  for (const phi of capAngles) {
+    const k = Math.PI / 2 - phi;
+    rings.push({ c: P[last].map((v, d) => v + T[last][d] * R[last] * Math.sin(k)), r: R[last] * Math.cos(k), N: frames[last][0], B: frames[last][1] });
+  }
+  const verts = [];
+  for (const g of rings) for (let j = 0; j < seg; j++) {
+    const a = (j / seg) * Math.PI * 2, ca = Math.cos(a) * g.r, sa = Math.sin(a) * g.r;
+    verts.push(g.c[0] + g.N[0] * ca + g.B[0] * sa, g.c[1] + g.N[1] * ca + g.B[1] * sa, g.c[2] + g.N[2] * ca + g.B[2] * sa);
+  }
+  const apexA = verts.length / 3;
+  verts.push(...P[0].map((v, d) => v - T[0][d] * R[0]));
+  const apexB = apexA + 1;
+  verts.push(...P[last].map((v, d) => v + T[last][d] * R[last]));
+  const tris = [];
+  for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < seg; j++) {
+    const a = i * seg + j, b = i * seg + ((j + 1) % seg), c = (i + 1) * seg + j, d = (i + 1) * seg + ((j + 1) % seg);
+    tris.push(a, b, c, b, d, c);
+  }
+  for (let j = 0; j < seg; j++) {
+    tris.push(j, apexA, (j + 1) % seg); // start cap
+    const o = (rings.length - 1) * seg;
+    tris.push(o + j, o + ((j + 1) % seg), apexB); // end cap
+  }
+  return Manifold.ofMesh(new MeshCtor({ numProp: 3, vertProperties: Float32Array.from(verts), triVerts: Uint32Array.from(tris) }));
+}
+
+/** Rounded tube made of hulled spheres: slow, but robust around tight corners (limbs, sharp bends). */
+export function tubeJoined(points, radii, n) {
   const r = (i) => (Array.isArray(radii) ? radii[i] : radii);
   const spheres = points.map((p, i) => ball(r(i), p, n || segs(r(i), 12)));
   const parts = [];

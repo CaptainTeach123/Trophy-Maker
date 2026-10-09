@@ -9,47 +9,8 @@ import { buildPlaque } from './parts/plaques.js';
 import { decorateBase, decorateColumn, decorateTopper } from './parts/ornaments.js';
 import { textCross } from './text.js';
 
-export function defaultState() {
-  return {
-    base: { style: 'plinth', width: 90, depth: 90, height: 42 },
-    column: { style: 'baluster', height: 44, radius: 9 },
-    topper: { style: 'cup', size: 100, text: '1', font: 'bebas', embolden: 0, backing: true, stlId: null, rx: 0, ry: 0, rz: 0 },
-    plaque: {
-      style: 'rounded', mount: 'front', width: 64, height: 18, thickness: 3, bevel: 0.8, textMode: 'raise', textDepth: 1,
-      embolden: 0, tilt: 0,
-      lines: [
-        { text: 'WORLD CHAMPION', font: 'cinzel', size: 5.5 },
-        { text: 'First Place · 2026', font: 'cinzel', size: 3.8 },
-      ],
-    },
-    orn: {
-      base: { beadsTop: false, beadsFoot: false, beadSize: 1.7, beadSpacing: 5.5, finials: false, finialStyle: 'urn', finialSize: 11, feet: false, footHeight: 6, footStyle: 'ball', podiumNumbers: true },
-      column: { collars: false, leaves: false },
-      topper: { wings: false, wingSize: 0.42, wingHeight: 0.55, halo: false, haloSize: 0.3, haloStars: 7 },
-      plaque: { border: false, doubleBorder: false, studs: false, scrolls: false, laurel: false },
-    },
-    extras: [],
-    output: { mode: 'weld', splitText: false, scaleTo: 0, quality: 1 },
-  };
-}
-
-export function newExtra(type = 'text', n = 1) {
-  return type === 'text'
-    ? { id: Math.random().toString(36).slice(2, 8), type: 'text', text: 'TEXT', font: 'cinzel', size: 8, depth: 1.2, embolden: 0, anchor: 'baseFront', orient: 'upright', ox: 0, oy: 0, oz: 0, rz: 0, mode: 'weld', align: 'center' }
-    : { id: Math.random().toString(36).slice(2, 8), type: 'stl', assetId: null, anchor: 'topperTop', scale: 100, fitHeight: 0, ox: 0, oy: 0, oz: 0, rx: 0, ry: 0, rz: 0, mode: 'weld' };
-}
-
-export const ANCHORS = [
-  ['baseFront', 'Base — front face'],
-  ['baseBack', 'Base — back face'],
-  ['baseLeft', 'Base — left face'],
-  ['baseRight', 'Base — right face'],
-  ['baseTop', 'Base — top surface'],
-  ['column', 'Column — middle'],
-  ['topperTop', 'Very top of the trophy'],
-  ['plaqueFront', 'Plaque — front face'],
-  ['floor', 'Print bed (0,0,0)'],
-];
+import { defaultState, newExtra, ANCHORS } from './state.js';
+export { defaultState, newExtra, ANCHORS };
 
 const GROUP_OF_ANCHOR = { baseFront: 'base', baseBack: 'base', baseLeft: 'base', baseRight: 'base', baseTop: 'base', column: 'column', topperTop: 'topper', plaqueFront: 'plaque', floor: 'base' };
 
@@ -174,7 +135,9 @@ export function buildTrophy(state, assets = {}) {
       const pw = Math.max(10, Math.min(PL.width, mnt.maxW));
       const ph = Math.max(6, Math.min(PL.height, mnt.maxH));
       if (pw < PL.width - 0.01 || ph < PL.height - 0.01) warnings.push(`Plaque shrunk to ${pw.toFixed(0)}×${ph.toFixed(0)} mm to fit the base — pick a taller/wider base for a bigger plaque.`);
-      const plRes = cached('plaque', JSON.stringify([PL, S.orn.plaque, pw, ph, mnt.curved, qk]), () => {
+      // raised text is fused into the plate here (inside the cache entry) whenever the final body is a single welded solid
+      const mergeText = !sep && S.output.mode !== 'parts' && !S.output.splitText;
+      const plRes = cached('plaque', JSON.stringify([PL, S.orn.plaque, pw, ph, mnt.curved, qk, mergeText]), () => {
         // built SINK mm thicker and shifted back into the base: the weld is a true overlap, never a coplanar touch
         const plq = buildPlaque({ ...PL, width: pw, height: ph, thickness: PL.thickness + (sep ? 0 : SINK), orn: S.orn.plaque }, { embed: sep ? 0 : mnt.curved ? 5 : 4 });
         const warp = (m) => {
@@ -182,7 +145,8 @@ export function buildTrophy(state, assets = {}) {
           const { a, b } = mnt.curved;
           return m.refineToLength(2.2).warp((v) => { const x = Math.min(Math.abs(v[0]), a * 0.985); v[1] += b * (1 - Math.sqrt(1 - (x / a) ** 2)); });
         };
-        return { body: warp(plq.body), text: plq.text ? warp(plq.text) : null };
+        const body = warp(plq.body), text = plq.text ? warp(plq.text) : null;
+        return mergeText && text ? { body: union([body, text]), text: null } : { body, text };
       });
       const { body, text } = plRes;
       const place = (m) => m.translate([0, sep ? 0 : SINK, 0]).rotate([-(mnt.tilt + (PL.tilt || 0)), 0, 0]).translate([0, mnt.y, mnt.z]);

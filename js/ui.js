@@ -1,12 +1,8 @@
 // Side panel: tabs, option cards, sliders, text/STL tools.
-import { BASES } from './parts/bases.js';
-import { COLUMNS } from './parts/columns.js';
-import { TOPPERS } from './parts/toppers.js';
-import { PLAQUES } from './parts/plaques.js';
+import { BASES, COLUMNS, TOPPERS, PLAQUES } from './catalog.js';
 import { PRESETS } from './presets.js';
-import { ANCHORS, newExtra } from './builder.js';
-import { listFonts } from './text.js';
-import { MATERIALS } from './viewer.js';
+import { ANCHORS, newExtra } from './state.js';
+import { listFonts } from './fonts-meta.js';
 
 /* ------------------------------------------------------------------ tiny DOM kit */
 export function h(tag, props = {}, ...kids) {
@@ -163,7 +159,7 @@ export function initUI(app) {
       return [
         h('h2', { text: 'Column' }),
         h('p', { class: 'lead', text: 'Lifts the topper above the base. Choose “No column” to seat the topper directly on the base.' }),
-        cards('column', COLUMNS.map((x) => ({ ...x, noThumb: x.id === 'none' })), c.style, (id) => { c.style = id; changed(); render(); }),
+        cards('column', COLUMNS.map((x) => ({ ...x, noThumb: !x.solid })), c.style, (id) => { c.style = id; changed(); render(); }),
         c.style !== 'none' && h('h3', { text: 'Size' }),
         c.style !== 'none' && slider('Height', c, 'height', 5, 140, 1),
         c.style !== 'none' && slider('Thickness', c, 'radius', 3, 30, 0.5, 'r'),
@@ -172,7 +168,7 @@ export function initUI(app) {
 
     topper() {
       const t = S().topper;
-      const items = TOPPERS.map((x) => ({ ...x, noThumb: x.id === 'none' || x.id === 'stl', glyph: x.id === 'stl' ? 'STL' : '∅' }));
+      const items = TOPPERS.map((x) => ({ ...x, noThumb: !x.solid, glyph: x.id === 'stl' ? 'STL' : '∅' }));
       const out = [
         h('h2', { text: 'Topper' }),
         h('p', { class: 'lead', text: 'The star of the show. Use “Your STL” for any model you like, or “Custom Text” for lettering.' }),
@@ -355,7 +351,7 @@ export function initUI(app) {
     const out = [];
     if (ids.length) out.push(select('Model', [['', '— choose —'], ...ids.map((id) => [id, app.assets[id].name])], obj, key, () => render()));
     out.push(h('div', { class: 'btns' }, h('button', { class: 'btn', text: '📂 Upload STL…', onClick: () => app.pickStl((id) => { obj[key] = id; changed(true); render(); }) })));
-    if (obj[key] && app.assets[obj[key]] && !app.assets[obj[key]].manifold) out.push(h('div', { class: 'note warn', text: app.assets[obj[key]].reason }));
+    if (obj[key] && app.assets[obj[key]] && !app.assets[obj[key]].weldable) out.push(h('div', { class: 'note warn', text: app.assets[obj[key]].reason }));
     return out;
   }
   function assetList() {
@@ -364,7 +360,7 @@ export function initUI(app) {
     return ids.map((id) => {
       const a = app.assets[id];
       return h('div', { class: 'panelbox' }, h('div', { class: 'hd' }, h('b', { text: a.name }), h('button', { class: 'btn small danger', text: 'Remove', onClick: () => app.removeAsset(id) })),
-        h('div', { class: 'kv' }, h('span', { text: 'Triangles' }), h('span', { text: String(a.soup.length / 9) }), h('span', { text: 'Weldable' }), h('span', { text: a.manifold ? 'Yes — watertight ✓' : 'No — exported as its own shell' })));
+        h('div', { class: 'kv' }, h('span', { text: 'Triangles' }), h('span', { text: String(a.triangles) }), h('span', { text: 'Weldable' }), h('span', { text: a.weldable ? 'Yes — watertight ✓' : 'No — exported as its own shell' })));
     });
   }
   function fontUploadBtn() { return h('button', { class: 'btn', text: 'Aa Upload font…', title: 'TTF, OTF or WOFF', onClick: () => app.pickFont(() => render()) }); }
@@ -374,4 +370,3 @@ export function initUI(app) {
   return { render, setTab: (t) => { tab = t; render(); } };
 }
 
-export { MATERIALS };

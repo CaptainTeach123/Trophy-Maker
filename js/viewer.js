@@ -1,7 +1,6 @@
 // three.js viewer (Z-up, like slicers). Shows the same meshes that get exported.
 import * as THREE from 'three';
-import { OrbitControls } from '../vendor/three/OrbitControls.js';
-import { RoomEnvironment } from '../vendor/three/RoomEnvironment.js';
+import { OrbitControls, RoomEnvironment } from 'three';
 
 export const MATERIALS = {
   gold: { color: 0xd9ac3c, metalness: 0.92, roughness: 0.3 },
@@ -12,66 +11,15 @@ export const MATERIALS = {
 };
 const GROUP_COLORS = { base: 0x6d7a96, column: 0xc9a14a, topper: 0xd9ac3c, plaque: 0x8a5a3c, plaqueText: 0xf0e6c8, extra: 0x5fb37c, trophy: 0xd9ac3c };
 
-/** Smooth normals only across gentle edges (crease angle), flat across sharp ones. Returns non-indexed attributes. */
-export function creaseGeometry(positions, indices, creaseDeg = 38) {
-  const triCount = indices ? indices.length / 3 : positions.length / 9;
-  const pos = new Float32Array(triCount * 9);
-  const nrm = new Float32Array(triCount * 9);
-  const fn = new Float32Array(triCount * 3);
-  const get = (t, c) => (indices ? indices[t * 3 + c] : t * 3 + c);
-  for (let t = 0; t < triCount; t++) {
-    const a = get(t, 0), b = get(t, 1), c = get(t, 2);
-    for (let k = 0; k < 3; k++) {
-      const v = get(t, k);
-      pos[t * 9 + k * 3] = positions[v * 3]; pos[t * 9 + k * 3 + 1] = positions[v * 3 + 1]; pos[t * 9 + k * 3 + 2] = positions[v * 3 + 2];
-    }
-    const ux = positions[b * 3] - positions[a * 3], uy = positions[b * 3 + 1] - positions[a * 3 + 1], uz = positions[b * 3 + 2] - positions[a * 3 + 2];
-    const vx = positions[c * 3] - positions[a * 3], vy = positions[c * 3 + 1] - positions[a * 3 + 1], vz = positions[c * 3 + 2] - positions[a * 3 + 2];
-    // area-weighted (unnormalised) face normal
-    fn[t * 3] = uy * vz - uz * vy; fn[t * 3 + 1] = uz * vx - ux * vz; fn[t * 3 + 2] = ux * vy - uy * vx;
-  }
-  if (!indices) {
-    for (let t = 0; t < triCount; t++) {
-      const l = Math.hypot(fn[t * 3], fn[t * 3 + 1], fn[t * 3 + 2]) || 1;
-      for (let k = 0; k < 3; k++) { nrm[t * 9 + k * 3] = fn[t * 3] / l; nrm[t * 9 + k * 3 + 1] = fn[t * 3 + 1] / l; nrm[t * 9 + k * 3 + 2] = fn[t * 3 + 2] / l; }
-    }
-    return { pos, nrm };
-  }
-  const nv = positions.length / 3;
-  const counts = new Uint32Array(nv + 1);
-  for (let i = 0; i < indices.length; i++) counts[indices[i] + 1]++;
-  for (let i = 0; i < nv; i++) counts[i + 1] += counts[i];
-  const fill = counts.slice(0, nv);
-  const adj = new Uint32Array(indices.length);
-  for (let t = 0; t < triCount; t++) for (let k = 0; k < 3; k++) adj[fill[indices[t * 3 + k]]++] = t;
-  const cosC = Math.cos((creaseDeg * Math.PI) / 180);
-  const len = (t) => Math.hypot(fn[t * 3], fn[t * 3 + 1], fn[t * 3 + 2]) || 1;
-  for (let t = 0; t < triCount; t++) {
-    const lt = len(t);
-    const tx = fn[t * 3] / lt, ty = fn[t * 3 + 1] / lt, tz = fn[t * 3 + 2] / lt;
-    for (let k = 0; k < 3; k++) {
-      const v = indices[t * 3 + k];
-      let sx = 0, sy = 0, sz = 0;
-      for (let j = counts[v]; j < counts[v + 1]; j++) {
-        const o = adj[j];
-        const lo = len(o);
-        const d = (fn[o * 3] * tx + fn[o * 3 + 1] * ty + fn[o * 3 + 2] * tz) / lo;
-        if (d >= cosC) { sx += fn[o * 3]; sy += fn[o * 3 + 1]; sz += fn[o * 3 + 2]; }
-      }
-      const l = Math.hypot(sx, sy, sz) || 1;
-      nrm[t * 9 + k * 3] = sx / l; nrm[t * 9 + k * 3 + 1] = sy / l; nrm[t * 9 + k * 3 + 2] = sz / l;
-    }
-  }
-  return { pos, nrm };
-}
-
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.autoUpdate = false; // the shadow only depends on the model: redraw it when the model changes
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
@@ -91,7 +39,7 @@ export class Viewer {
     const key = new THREE.DirectionalLight(0xffffff, 1.9);
     key.position.set(-180, -260, 420);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.mapSize.set(1536, 1536);
     Object.assign(key.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 50, far: 1200 });
     key.shadow.bias = -0.0004;
     key.shadow.normalBias = 0.6;
@@ -115,12 +63,26 @@ export class Viewer {
 
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
-    const loop = () => { this.controls.autoRotate = this.autoRotate; this.controls.autoRotateSpeed = 1.6; this.controls.update(); this.renderer.render(this.scene, this.camera); requestAnimationFrame(loop); };
-    loop();
+    this.controls.autoRotateSpeed = 1.6;
+    this.controls.addEventListener('change', () => this.requestRender());
+    this.requestRender();
+  }
+
+  /** Draw on demand: zero CPU/GPU while nothing moves. Keeps running only while the camera is settling or spinning. */
+  requestRender() {
+    if (this._raf) return;
+    this._raf = requestAnimationFrame(() => {
+      this._raf = 0;
+      this.controls.autoRotate = this.autoRotate;
+      const moving = this.controls.update(); // fires 'change' (-> another frame) while damping/auto-rotating
+      this.renderer.render(this.scene, this.camera);
+      if (this.autoRotate || moving) this.requestRender();
+    });
   }
 
   setBed(size) {
     this.bed.clear();
+    this.requestRender();
     if (!size) return;
     const plate = new THREE.Mesh(new THREE.CircleGeometry(size * 0.62, 96), new THREE.MeshStandardMaterial({ color: 0x14161b, roughness: 1, metalness: 0.0, envMapIntensity: 0.04 }));
     plate.position.z = -0.05;
@@ -141,6 +103,7 @@ export class Viewer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / Math.max(h, 1);
     this.camera.updateProjectionMatrix();
+    this.requestRender();
   }
 
   materialFor(group) {
@@ -150,24 +113,27 @@ export class Viewer {
     return new THREE.MeshStandardMaterial({ color, metalness: m.metalness, roughness: m.roughness, wireframe: this.wire, side: THREE.DoubleSide });
   }
 
+  /** bodies: [{ group, pos, nrm }] — typed arrays prepared (and normals smoothed) in the worker */
   setBodies(bodies) {
     this.bodies = bodies;
     for (const c of [...this.group.children]) { c.geometry.dispose(); c.material.dispose(); this.group.remove(c); }
     for (const b of bodies) {
-      const { pos, nrm } = creaseGeometry(b.positions, b.indices);
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+      g.setAttribute('position', new THREE.BufferAttribute(b.pos, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(b.nrm, 3));
       const mesh = new THREE.Mesh(g, this.materialFor(b.group));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.group = b.group;
       this.group.add(mesh);
     }
+    this.renderer.shadowMap.needsUpdate = true;
+    this.requestRender();
   }
 
   refreshMaterials() {
     for (const m of this.group.children) { m.material.dispose(); m.material = this.materialFor(m.userData.group); }
+    this.requestRender();
   }
 
   bbox() {
@@ -189,9 +155,9 @@ export class Viewer {
     this.controls.target.set(c.x, c.y, c.z * 0.96);
     this.camera.position.copy(this.controls.target).add(d);
     this.controls.update();
+    this.requestRender();
   }
 
-  snapshot() { return this.canvas.toDataURL('image/png'); }
 }
 
 /** Small offscreen renderer for option thumbnails. */
@@ -215,13 +181,13 @@ export class ThumbRenderer {
     this.mat = new THREE.MeshStandardMaterial({ color: 0xd9ac3c, metalness: 0.9, roughness: 0.32, side: THREE.DoubleSide });
   }
 
+  /** bodies: [{ pos, nrm }] prepared by the worker */
   render(bodies, { dir = [-0.5, -1, 0.45], fill = 1 } = {}) {
     const group = new THREE.Group();
     for (const b of bodies) {
-      const { pos, nrm } = creaseGeometry(b.positions, b.indices);
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+      g.setAttribute('position', new THREE.BufferAttribute(b.pos, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(b.nrm, 3));
       group.add(new THREE.Mesh(g, this.mat));
     }
     this.scene.add(group);

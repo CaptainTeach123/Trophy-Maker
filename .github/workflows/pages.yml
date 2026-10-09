@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Geometry smoke test (every option must produce a watertight solid)
+      - name: Geometry smoke test (every option builds a watertight solid; catalogue + thumbnails are up to date)
         run: node tests/smoke.mjs
       - name: Connectivity test (every design must export as ONE solid — no floating bits, voids or slivers)
         run: node tests/connected.mjs

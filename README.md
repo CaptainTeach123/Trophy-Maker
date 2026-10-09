@@ -54,23 +54,41 @@ This repo is already a deployable static site.
 Run locally: `python3 -m http.server` (or any static server) and open <http://localhost:8000>.
 Opening `index.html` straight from disk won't work — ES modules and WASM need `http://`.
 
+## How it stays fast
+
+* **Geometry runs in a Web Worker.** The page never freezes: dragging a slider keeps the preview responsive while the
+  worker rebuilds, and edits made mid-build are coalesced into one follow-up build.
+* **Only what changed is rebuilt.** Base, column, topper and plaque solids are cached by their parameters (raised
+  plaque text is fused into its plate inside that cache), so editing a plaque name or resizing a topper doesn't redo
+  the rest. Typical edits take 60–150 ms in the worker.
+* **Cheap primitives.** Tubes (handles, arches, stems) are swept meshes rather than chains of boolean unions
+  (~25× faster), and tessellation is tuned to chord errors well below a print layer.
+* **Render on demand.** The preview draws only when something moves or changes (0% CPU/GPU idle); the shadow map is
+  re-rendered only when the model changes. Smoothed normals are computed in the worker.
+* **Small payload.** three.js is a tree-shaken, minified bundle (570 KB → 143 KB gzip); opentype.js is the minified
+  build; fflate loads only for ZIP exports and share links; fonts load on demand; option thumbnails are pre-rendered
+  WebP. First load is about 1.8 MB raw / 0.6 MB gzip.
+
 ## Project layout
 
 ```
-index.html            page shell
+index.html            page shell (starts the worker immediately, in parallel with the UI modules)
 css/style.css
-js/kernel.js          Manifold wrapper: scoped memory management + shape helpers
-js/builder.js         assembles state -> watertight solids (stacking, plaque mount, extras, weld/parts)
-js/text.js            fonts + text -> 2D outlines (opentype.js)
-js/stl.js             STL import (weld to manifold) / export
-js/viewer.js          three.js preview and thumbnail renderer
-js/ui.js, main.js     panels, actions, persistence, share links
-js/presets.js         full-trophy presets
+js/main.js            UI thread: state, viewer, actions, persistence, share links
+js/ui.js              panels and controls            js/viewer.js   three.js preview + thumbnail renderer
+js/engine.js          promise-based RPC to the worker js/thumbs.js   option-card thumbnails
+js/state.js           design state + defaults        js/presets.js  full-trophy presets
+js/catalog.js         GENERATED id/name lists for the UI (tools/gen-catalog.mjs)
+js/worker.js          geometry worker: build, STL import/export, fonts
+js/builder.js         state -> watertight solids (stacking, plaque mount, extras, weld/parts, caching)
+js/kernel.js          Manifold wrapper: scoped memory management, tubes, lathes, dust cleanup
+js/text.js            text -> 2D outlines (opentype.js)   js/stl.js  STL import (weld) / export
+js/normals.js         crease-aware smooth normals
 js/parts/             bases.js columns.js toppers.js plaques.js ornaments.js  ← add new options here
-vendor/               manifold-3d, three.js, opentype.js, fflate (vendored; see THIRD_PARTY.md)
-fonts/                bundled OFL fonts
-tests/                smoke.mjs (every option), connected.mjs (one clean solid), fuzz.mjs (random combinations)
-tools/gen-thumbs.mjs  renders the pre-built option thumbnails in thumbs/
+vendor/               manifold-3d, three.js bundle, opentype.js, fflate (see THIRD_PARTY.md)
+fonts/                bundled OFL fonts            thumbs/   pre-rendered option previews
+tests/                smoke.mjs, connected.mjs, fuzz.mjs
+tools/                gen-thumbs.mjs, gen-catalog.mjs, build-vendor.mjs
 ```
 
 ### Adding a part
@@ -82,7 +100,8 @@ Each part type is a list of `{ id, name, build }` entries. For example a new top
 ```
 
 `s` is the requested height in mm; return a Manifold standing on `z = 0`, centred on the origin, facing `-Y`.
-Its thumbnail and place in the UI appear automatically. Run `npm test` to check it is watertight.
+Then run `npm run catalog` (updates the UI's id/name list), `npm run thumbs` (renders its preview, needs Playwright) and
+`npm test` (watertight, one connected solid, catalogue and thumbnails up to date).
 
 ## Tests
 
@@ -90,7 +109,9 @@ Its thumbnail and place in the UI appear automatically. Run `npm test` to check 
 node tests/smoke.mjs       # every base / column / topper / plaque / ornament builds a valid solid (+ thumbnails exist)
 node tests/connected.mjs   # every preset/option exports as ONE connected solid: no floating bits, voids or slivers
 node tests/fuzz.mjs 100    # 100 random combinations incl. extras, parts mode, scaling, connectivity
+node tools/gen-catalog.mjs # regenerate js/catalog.js after adding/renaming a part
 node tools/gen-thumbs.mjs  # regenerate the option-card previews in /thumbs (needs playwright) after changing geometry
+node tools/build-vendor.mjs# rebuild the minified three.js bundle (npm i -D three esbuild)
 ```
 
 ## License
