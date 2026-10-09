@@ -136,6 +136,93 @@ export const COLUMNS = [
       return pts;
     }),
   },
+  {
+    id: 'oct', name: 'Octagonal Column',
+    build: (p) => ({
+      solid: polyLathe([[p.radius * 1.05, 0], [p.radius * 1.05, p.height]], 8, { rot: 22.5 }),
+      height: p.height, topR: p.radius * 0.95, radiusAt: () => p.radius * 1.05 * 0.97,
+    }),
+  },
+  {
+    id: 'octTaper', name: 'Tapered Octagon',
+    build: (p) => {
+      const r0 = p.radius * 1.3, r1 = p.radius * 0.65;
+      return { solid: polyLathe([[r0, 0], [r1, p.height]], 8, { rot: 22.5 }), height: p.height, topR: r1 * 0.95, radiusAt: (z) => (r0 + (r1 - r0) * clamp(z / p.height, 0, 1)) * 0.97 };
+    },
+  },
+  {
+    id: 'spire', name: 'Spire',
+    build: (p) => turned(p, (r, h) => [[r * 1.5, 0], [r * 1.1, h * 0.12], [r * 0.75, h * 0.5], [r * 0.45, h]]),
+  },
+  {
+    id: 'hourglass', name: 'Hourglass',
+    build: (p) => turned(p, (r, h) => {
+      const pts = [];
+      const n = 16;
+      for (let i = 0; i <= n; i++) { const t = i / n; pts.push([r * (0.5 + 1.0 * Math.pow(Math.abs(2 * t - 1), 1.6)), h * t]); }
+      return pts;
+    }),
+  },
+  {
+    id: 'urn', name: 'Classic Urn',
+    build: (p) => turned(p, (r, h) => {
+      const pts = [[r * 1.1, 0], [r * 1.1, h * 0.05], [r * 0.6, h * 0.1], [r * 0.45, h * 0.18]];
+      const n = 14;
+      for (let i = 0; i <= n; i++) { const t = i / n; pts.push([r * (0.45 + 0.95 * Math.sin(Math.PI * Math.pow(t, 0.7) * 0.92)), h * (0.18 + 0.5 * t)]); }
+      pts.push([r * 0.8, h * 0.74], [r * 0.55, h * 0.8], [r * 0.55, h * 0.88], [r * 1.0, h * 0.93], [r * 1.0, h]);
+      return pts;
+    }),
+  },
+  {
+    id: 'beads', name: 'Bead Stack',
+    build: (p) => turned(p, (r, h) => {
+      const n = Math.max(2, Math.min(6, Math.round(h / (r * 1.6))));
+      const seg = h / n, pts = [];
+      for (let k = 0; k < n; k++) {
+        for (let i = 0; i <= 8; i++) {
+          const a = -Math.PI / 2 + (i / 8) * Math.PI;
+          pts.push([r * (0.62 + 0.62 * Math.cos(a)) , seg * (k + 0.5 + 0.5 * Math.sin(a))]);
+        }
+      }
+      return pts.map(([rr, z]) => [Math.max(rr, r * 0.6), z]);
+    }),
+  },
+  {
+    id: 'discs', name: 'Stacked Discs',
+    build: (p) => turned(p, (r, h) => {
+      const n = Math.max(3, Math.min(9, Math.round(h / 8))), seg = h / n, pts = [];
+      for (let k = 0; k < n; k++) {
+        const rr = r * (k % 2 ? 0.85 : 1.25), z0 = k * seg, z1 = (k + 1) * seg;
+        pts.push([rr, z0], [rr, z1]);
+      }
+      return pts;
+    }),
+  },
+  {
+    id: 'rope', name: 'Rope Twist',
+    build: (p) => {
+      const R = p.radius * 1.05, lobes = 5, pts = [];
+      for (let i = 0; i < 80; i++) {
+        const a = (i / 80) * Math.PI * 2, r = R * (1 + 0.24 * Math.cos(lobes * a));
+        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+      }
+      const div = Math.max(16, Math.round(p.height * 1.6));
+      const twisted = Manifold.extrude(polys([pts]), p.height, div, -300, 1);
+      const cH = Math.min(3, p.height * 0.07);
+      const cap = (z) => cyl(cH, R * 1.25, R * 1.25, [0, 0, z]);
+      return { solid: union([twisted, cap(0), cap(p.height - cH)]), height: p.height, topR: R * 0.95, radiusAt: () => R * 0.74 };
+    },
+  },
+  {
+    id: 'twistSquare', name: 'Twisted Square',
+    build: (p) => {
+      const s = p.radius * 0.95;
+      const cs = polys([[[-s, -s], [s, -s], [s, s], [-s, s]]]);
+      const twisted = Manifold.extrude(cs, p.height, Math.max(12, Math.round(p.height * 1.2)), 90, 1);
+      const cH = Math.min(3, p.height * 0.07), cs2 = s * 1.45;
+      return { solid: union([twisted, box(cs2, cs2, cH), box(cs2, cs2, cH).translate([0, 0, p.height - cH])]), height: p.height, topR: s, radiusAt: () => s * 0.96 };
+    },
+  },
 ];
 
 export function getColumn(id) { return COLUMNS.find((c) => c.id === id) || COLUMNS[0]; }

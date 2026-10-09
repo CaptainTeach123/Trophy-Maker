@@ -7,6 +7,7 @@ import { getColumn } from './parts/columns.js';
 import { getTopper } from './parts/toppers.js';
 import { buildPlaque } from './parts/plaques.js';
 import { decorateBase, decorateColumn, decorateTopper } from './parts/ornaments.js';
+import { getShape } from './parts/shapes.js';
 import { textCross } from './text.js';
 
 import { defaultState, newExtra, ANCHORS } from './state.js';
@@ -69,7 +70,7 @@ export function buildTrophy(state, assets = {}) {
     const qk = quality.factor;
     const baseKey = JSON.stringify([S.base, S.orn.base, qk]);
     const base0 = cached('base', baseKey, () => {
-      const b = bdef.build({ width: S.base.width, depth: bdef.rect ? S.base.depth : S.base.width, height: S.base.height, podiumNumbers: S.orn.base.podiumNumbers });
+      const b = bdef.build({ width: S.base.width, depth: bdef.rect ? S.base.depth : S.base.width, height: S.base.height, podiumNumbers: S.orn.base.podiumNumbers, edge: S.base.edge, corner: S.base.corner });
       return decorateBase(b, S.orn.base);
     });
     const lift = base0.lift || 0;
@@ -230,8 +231,8 @@ export function buildTrophy(state, assets = {}) {
         usedExtras.add('ex:' + ex.id);
         const built = cached('ex:' + ex.id, exKey, () => {
           let m = null;
-          if (ex.type === 'text') {
-            const cs = textCross(ex.font, ex.text || ' ', ex.size, { embolden: ex.embolden || 0, align: ex.align || 'center' });
+          if (ex.type === 'text' || ex.type === 'shape') {
+            const cs = ex.type === 'shape' ? getShape(ex.shape).cross(Math.max(2, ex.size)) : textCross(ex.font, ex.text || ' ', ex.size, { embolden: ex.embolden || 0, align: ex.align || 'center' });
             if (!cs) return { solid: null };
             const depth = Math.max(0.2, ex.depth);
             const engrave = ex.mode === 'engrave';
@@ -255,7 +256,7 @@ export function buildTrophy(state, assets = {}) {
       if (!solid) continue;
       const exMemberKey = 'ex:' + ex.id + JSON.stringify([ex.mode, ex.anchor, an.pos, an.rotZ]) + (an.plaque ? plaqueInfo.key : '') + JSON.stringify(ex) + (asset ? asset.rev : '');
       if (ex.mode === 'engrave') engraves[group].push({ m: solid, key: exMemberKey });
-      else if (ex.mode === 'separate') looseBodies.push({ name: ex.type === 'text' ? 'text-' + (ex.text || '').slice(0, 12) : 'stl-' + ex.id, group: 'extra', manifold: solid });
+      else if (ex.mode === 'separate') looseBodies.push({ name: ex.type === 'text' ? 'text-' + (ex.text || '').slice(0, 12) : ex.type === 'shape' ? 'shape-' + ex.shape : 'stl-' + ex.id, group: 'extra', manifold: solid });
       else groups[group].push({ m: solid, key: exMemberKey });
     }
     pruneCached('ex:', usedExtras);

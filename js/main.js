@@ -6,7 +6,7 @@ import { listFonts, addCustomFontMeta, nextCustomFontId } from './fonts-meta.js'
 import { Thumbs } from './thumbs.js';
 import { initUI, h } from './ui.js';
 import { PRESETS, applyPatch } from './presets.js';
-import { BASES, COLUMNS, TOPPERS, PLAQUES } from './catalog.js';
+import { BASES, COLUMNS, TOPPERS, PLAQUES, SHAPES } from './catalog.js';
 
 const engine = new Engine();
 const STORE = 'trophymaker.design.v1';
@@ -23,8 +23,8 @@ function sanitize(st) {
   const fonts = listFonts();
   const okFont = (id) => (fonts.some((f) => f.id === id) ? id : 'cinzel');
   st.topper.font = okFont(st.topper.font);
-  st.plaque.lines = (st.plaque.lines || []).slice(0, 6).map((l) => ({ text: String(l.text ?? ''), font: okFont(l.font), size: Number(l.size) || 4 }));
-  st.extras = (st.extras || []).slice(0, 24).map((e) => (e.type === 'text' ? { ...e, font: okFont(e.font) } : e));
+  st.plaque.lines = (st.plaque.lines || []).slice(0, 6).map((l) => ({ ...l, text: String(l.text ?? ''), font: okFont(l.font), size: Number(l.size) || 4 }));
+  st.extras = (st.extras || []).slice(0, 24).map((e) => (e.type === 'text' ? { ...e, font: okFont(e.font) } : e.type === 'shape' ? { ...e, shape: known(SHAPES, e.shape, 'star') } : e));
   if (!['weld', 'parts'].includes(st.output.mode)) st.output.mode = 'weld';
   return st;
 }

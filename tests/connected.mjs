@@ -10,6 +10,8 @@ import { BASES } from '../js/parts/bases.js';
 import { COLUMNS } from '../js/parts/columns.js';
 import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
+import { SHAPES } from '../js/parts/shapes.js';
+import { newExtra } from '../js/state.js';
 import { PRESETS, applyPatch } from '../js/presets.js';
 import { clearCache } from '../js/kernel.js';
 
@@ -58,6 +60,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   Object.assign(orn.orn.plaque, { border: true, doubleBorder: true, studs: true, scrolls: true, laurel: true });
   run('all ornaments (cup)', orn);
   for (const b of ['block', 'round', 'hex', 'oct2', 'podium', 'wedge', 'oval']) { const s = JSON.parse(JSON.stringify(orn)); s.base.style = b; run('all ornaments on ' + b, s); clearCache(); }
+  // the v1.1 detail options, each one on every base / column / topper it can touch
+  const baseDeco = { beadsTop: true, beadShape: 'diamond', cordTop: true, cordFoot: true, topPanel: true, railTop: true, railFoot: true, studRow: true, finials: true, finialStyle: 'flame' };
+  for (const b of BASES) { run('base details on ' + b.id, mk({ base: { style: b.id, edge: 2.2, corner: 8 } })); }
+  for (const b of BASES) { const s = defaultState(); s.base.style = b.id; Object.assign(s.orn.base, baseDeco); run('base deco on ' + b.id, s); clearCache(); }
+  for (const b of ['block', 'round', 'hex', 'tier3', 'table']) for (const style of ['cone', 'bun']) { const s = defaultState(); s.base.style = b; Object.assign(s.orn.base, { feet: true, footStyle: style, finials: true, finialStyle: 'acorn', beadsFoot: true, beadShape: 'cube' }); run(`feet ${style} on ${b}`, s); }
+  for (const c of COLUMNS) { const s = defaultState(); s.column.style = c.id; Object.assign(s.orn.column, { collars: true, leaves: true, bands: 3, knob: true, capital: true, skirt: true }); run('column details on ' + c.id, s); clearCache(); }
+  for (const t of TOPPERS) if (t.build) for (const col of ['baluster', 'none']) { const s = defaultState(); s.topper.style = t.id; s.column.style = col; Object.assign(s.orn.topper, { rays: true, pedestal: true }); run(`topper rays+pedestal ${t.id}/${col}`, s); }
+  for (const pl of PLAQUES) { const s = defaultState(); s.plaque.style = pl.id; s.plaque.width = 70; s.plaque.height = 24; Object.assign(s.orn.plaque, { border: true, beadBorder: true, studs: true, studStyle: 'star' }); s.plaque.lines[0].italic = 12; s.plaque.lines[0].caps = 'upper'; s.plaque.textAlign = 'left'; run('plaque details on ' + pl.id, s); clearCache(); }
+  for (const st of ['ball', 'star', 'diamond', 'square', 'flower']) { const s = defaultState(); Object.assign(s.orn.plaque, { studs: true, studStyle: st, doubleBorder: true, border: true }); run('studs ' + st, s); }
+  for (const sh of SHAPES) for (const anchor of ['baseFront', 'baseTop']) { const s = defaultState(); const e = newExtra('shape'); e.shape = sh.id; e.anchor = anchor; e.orient = anchor === 'baseTop' ? 'flat' : 'upright'; e.size = 14; s.extras.push(e); const bare = { ...s, extras: [] }; run(`shape ${sh.id} on ${anchor}`, bare); const r = buildTrophy(s, {}); if (!r.bodies.every((b) => b.watertight)) { bad++; console.log('FAIL shape not watertight', sh.id, anchor); } n++; }
   console.log(`\n${n - bad}/${n} designs are one clean connected solid`);
   process.exit(bad ? 1 : 0);
 }

@@ -29,7 +29,7 @@ const MUTATIONS = [
   (s) => { s.plaque.lines[0].text = pick(['ALPHA', 'Best in Show', 'WORLD CHAMPION']); },
   (s) => { s.plaque.textMode = pick(['raise', 'engrave']); }, (s) => { s.plaque.mount = pick(['front', 'front', 'separate', 'none']); },
   (s) => { s.orn.base.beadsTop = !s.orn.base.beadsTop; }, (s) => { s.orn.base.feet = !s.orn.base.feet; }, (s) => { s.orn.column.collars = !s.orn.column.collars; },
-  (s) => { s.orn.topper.wings = !s.orn.topper.wings; }, (s) => { s.orn.plaque.scrolls = !s.orn.plaque.scrolls; },
+  (s) => { s.orn.topper.wings = !s.orn.topper.wings; }, (s) => { s.orn.topper.rays = !s.orn.topper.rays; }, (s) => { s.orn.base.railTop = !s.orn.base.railTop; }, (s) => { s.orn.column.knob = !s.orn.column.knob; }, (s) => { s.orn.plaque.beadBorder = !s.orn.plaque.beadBorder; }, (s) => { s.base.edge = s.base.edge === 1 ? 2.5 : 1; }, (s) => { s.plaque.textAlign = s.plaque.textAlign === 'left' ? 'center' : 'left'; }, (s) => { s.orn.plaque.scrolls = !s.orn.plaque.scrolls; },
   (s) => { s.output.mode = pick(['weld', 'weld', 'parts']); }, (s) => { s.output.splitText = !s.output.splitText; },
   (s) => { const e = newExtra('text'); e.text = pick(['JANE', '2026', 'HELLO']); e.anchor = pick(ANCHORS)[0]; e.mode = pick(['weld', 'engrave', 'separate']); e.orient = ['baseTop', 'topperTop', 'floor'].includes(e.anchor) ? 'flat' : 'upright'; if (e.anchor === 'floor') e.mode = 'separate'; s.extras.push(e); },
   (s) => { if (s.extras.length) s.extras[Math.floor(rand() * s.extras.length)].oz = range(-8, 8); },

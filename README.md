@@ -11,14 +11,14 @@ upload ever leaves it.
 
 | | |
 |---|---|
-| **16 bases** | classic block, soft block, moulded plinth, two-tier, stepped pyramid, sloped plinth, desk wedge, winners podium (1-2-3), round disc, oval, round tiered, flared pedestal, hexagon, stepped hexagon, octagon, octagon plinth |
-| **10 columns** | none, cylinder, collared, tapered, turned baluster, knop stem, hexagonal, square pillar, twisted, fluted Doric, ringed pillar |
-| **25 toppers** | classic cup, loving cup & lid, goblet, faceted star, ringed star, laurel star, laurel wreath, winged star, winged orb, royal crown, victory figure, heart, lightning bolt, soccer ball, basketball, football, golf ball & tee, graduation cap, torch, rocket, medallion, crest shield, gear, gem, obelisk — plus **Custom Text** and **Your STL** |
-| **10 plaque shapes** | rectangle, rounded, cut corners, pill, arched top, oval, shield, ribbon banner, long hexagon, scooped corners — mounted on the base (flat, sloped, or **curved around round bases**), as a separate printable piece, or off |
-| **Text & fonts** | 18 bundled fonts (OFL), or upload any **TTF / OTF / WOFF**. Raised or engraved, auto-fitted to the plate, adjustable depth and "thicken" for delicate script fonts |
-| **Ornate details** | beaded rims, corner finials (urn / ball / spike / cone / pyramid), ball or block feet, collar rings, acanthus leaf wrap, rear wings, star halo, plaque borders (single/double), rivets, side scrolls, laurel sprigs |
-| **Extras** | drop extra text or your own **STL models** onto any face (front, back, left, right, top, column, plaque…), then **weld**, **engrave** or keep **separate** |
-| **Presets** | 12 ready-made trophies to start from, plus a 🎲 random generator |
+| **25 bases** | classic block, soft block, moulded plinth, two-tier, stepped pyramid, sloped plinth, desk wedge, winners podium (1-2-3), round disc, oval, round tiered, flared pedestal, hexagon, stepped hexagon, octagon, octagon plinth, art-deco steps, soft two-tier, slab on legs, banded drum, ring-foot pedestal, round plinth, oval tiered, pentagon, hexagon plinth — plus **edge softness** and **corner rounding** sliders |
+| **20 columns** | none, cylinder, collared, tapered, turned baluster, knop stem, hexagonal, square pillar, twisted, fluted Doric, ringed pillar, octagonal, tapered octagon, spire, hourglass, classic urn, bead stack, stacked discs, rope twist, twisted square |
+| **39 toppers** | classic cup, loving cup & lid, goblet, champion bowl, tall flute, faceted star, ringed star, laurel star, laurel wreath, winged star, winged orb, royal crown, victory figure, heart, lightning bolt, soccer ball, basketball, football, golf ball & tee, graduation cap, torch, rocket, medallion, crest shield, gear, gem, obelisk, globe, stepped pyramid, crescent moon, sunburst, checkered flag, sword, music notes, open book, light bulb, dumbbell, microphone, paw print — plus **Custom Text** and **Your STL** |
+| **17 plaque shapes** | rectangle, rounded, cut corners, pill, arched top, oval, shield, ribbon banner, long hexagon, scooped corners, octagon, swallowtail ribbon, pointer, keystone, slanted, scalloped, ticket — mounted on the base (flat, sloped, or **curved around round bases**), as a separate printable piece, or off |
+| **Text & fonts** | 18 bundled fonts (OFL), or upload any **TTF / OTF / WOFF**. Raised or engraved, auto-fitted to the plate, adjustable depth and "thicken" for delicate script fonts, left/centre/right alignment, line spacing, and per-line case (UPPER / lower) and italic slant |
+| **Ornate details** | *Base:* pearl / cube / diamond bead rims, rope cords, stepped moulding rails, stud bands, raised top panel, corner finials (urn / ball / flame / acorn / spike / cone / pyramid), ball / bun / tapered / block feet. *Column:* collar rings, acanthus leaf wrap, capital, skirt, centre knob, decorative bands. *Topper:* rear wings, star halo, sun rays, stepped pedestal. *Plaque:* single / double border with adjustable width, pearl border, corner studs (rivet / star / diamond / square / flower), side scrolls, laurel sprigs |
+| **Extras** | drop extra text, one of 18 flat **shapes** (stars, hearts, rings, bolts, crescents…) or your own **STL models** onto any face (front, back, left, right, top, column, plaque…), then **weld**, **engrave** or keep **separate** |
+| **Presets** | 17 ready-made trophies to start from, plus a 🎲 random generator |
 | **Export** | single welded binary STL, or a ZIP of non-overlapping parts (base / column / topper / plaque / text) positioned as assembled. Optional scale-to-height and 3 smoothness levels |
 | **Share** | copy a link that encodes your whole design, or save/load a `.json` |
 
@@ -30,6 +30,10 @@ internal faces, flipped normals, gaps or self-intersections. The status bar show
 in the export is a valid manifold. Parts are deliberately overlapped by a fraction of a millimetre where they meet (never
 just touching), so a welded trophy is **one connected solid** with no floating islands, internal voids or zero-volume
 slivers — the tests below assert exactly that on every preset and hundreds of random combinations.
+
+**Separate-parts ZIP caveat:** each part is cut against the ones before it so the files don't overlap. Where a base moulding
+or a stepped round base overlaps a plaque's scrolls, laurel or corner studs, those details can be sliced off their roots in
+that export mode — use the welded export (or turn the detail off) for those combinations.
 
 **Uploading your own STL?** If it is watertight it is welded into the trophy like any other part. If it has holes
 or non-manifold edges it can't be fused safely, so it's exported as its own separate shell and you get a warning.
@@ -84,7 +88,7 @@ js/builder.js         state -> watertight solids (stacking, plaque mount, extras
 js/kernel.js          Manifold wrapper: scoped memory management, tubes, lathes, dust cleanup
 js/text.js            text -> 2D outlines (opentype.js)   js/stl.js  STL import (weld) / export
 js/normals.js         crease-aware smooth normals
-js/parts/             bases.js columns.js toppers.js plaques.js ornaments.js  ← add new options here
+js/parts/             bases.js columns.js toppers.js plaques.js ornaments.js shapes.js  ← add new options here
 vendor/               manifold-3d, three.js bundle, opentype.js, fflate (see THIRD_PARTY.md)
 fonts/                bundled OFL fonts            thumbs/   pre-rendered option previews
 tests/                smoke.mjs, connected.mjs, cache.mjs, fuzz.mjs
@@ -107,7 +111,7 @@ Then run `npm run catalog` (updates the UI's id/name list), `npm run thumbs` (re
 
 ```
 node tests/smoke.mjs       # every base / column / topper / plaque / ornament builds a valid solid (+ thumbnails exist)
-node tests/connected.mjs   # every preset/option exports as ONE connected solid: no floating bits, voids or slivers
+node tests/connected.mjs   # every preset/option — and every detail option on every part — exports as ONE connected solid: no floating bits, voids or slivers
 node tests/cache.mjs 60    # incremental (cached) builds must equal from-scratch builds after every random edit
 node tests/fuzz.mjs 100    # 100 random combinations incl. extras, parts mode, scaling, connectivity
 node tools/gen-catalog.mjs # regenerate js/catalog.js after adding/renaming a part

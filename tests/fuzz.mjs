@@ -8,6 +8,7 @@ import { BASES } from '../js/parts/bases.js';
 import { COLUMNS } from '../js/parts/columns.js';
 import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
+import { SHAPES } from '../js/parts/shapes.js';
 import { PRESETS, applyPatch } from '../js/presets.js';
 import { clearCache } from '../js/kernel.js';
 import { problems } from './connected.mjs';
@@ -33,9 +34,11 @@ function validate(label, state) {
     let conn = [];
     if (ok) {
       // structural check on the design without free-placed extras (those are the user's responsibility)
-      // In "parts" mode each part is cut against the ones before it, which can slice the roots off a plaque's scrolls or
-      // laurel where a stepped round base overlaps them — a known limitation, so that combination is checked as a weld.
-      const flourish = state.plaque.mount === 'front' && (state.orn.plaque.scrolls || state.orn.plaque.laurel);
+      // In "parts" mode each part is cut against the ones before it, which can slice the roots off a plaque's scrolls,
+      // laurel or corner studs where a base moulding or stepped round base overlaps them — a known limitation, so that combination is checked as a weld.
+      // Details are welded to their own part; in parts mode a neighbouring part's details can cut them, so those designs are checked as welds.
+      const anyOrn = Object.values(state.orn).some((g) => Object.values(g).some((v) => v === true));
+      const flourish = state.output.mode === 'parts' && anyOrn;
       const bare = { ...state, extras: [], plaque: { ...state.plaque, tilt: 0 }, output: { ...state.output, mode: flourish ? 'weld' : state.output.mode } };
       conn = problems(bare, (state.extras.length || state.plaque.tilt || flourish) ? buildTrophy(bare, {}) : r);
     }
@@ -62,10 +65,21 @@ for (let i = 0; i < N; i++) {
   for (const grp of Object.values(s.orn)) for (const k of Object.keys(grp)) if (typeof grp[k] === 'boolean') grp[k] = rand() < 0.35;
   s.orn.base.finialStyle = pick(['urn', 'ball', 'spike', 'cone', 'pyramid']); s.orn.base.footStyle = pick(['ball', 'block']);
   s.orn.base.finialSize = range(5, 18); s.orn.base.beadSize = range(1, 3); s.orn.base.beadSpacing = range(3.5, 9);
+  const ob = s.orn.base, oc = s.orn.column, ot = s.orn.topper, op = s.orn.plaque;
+  ob.finialStyle = pick(['urn', 'ball', 'flame', 'acorn', 'spike', 'cone', 'pyramid']); ob.footStyle = pick(['ball', 'bun', 'cone', 'block']);
+  ob.beadShape = pick(['ball', 'cube', 'diamond']); ob.cordSize = range(0.8, 3); ob.railSize = range(0.6, 3); ob.studZ = range(0.2, 0.8); ob.studSize = range(1, 3.5); ob.studSpacing = range(5, 14);
+  ob.panelInset = range(2, 12); ob.panelHeight = range(0.8, 3);
+  oc.bands = Math.floor(rand() * 5); oc.knobSize = range(1, 2.4);
+  ot.rayCount = Math.floor(range(6, 26)); ot.rayLength = range(0.1, 0.5);
+  op.studStyle = pick(['ball', 'star', 'diamond', 'square', 'flower']); op.studSize = range(0.7, 1.8); op.borderWidth = range(0.6, 2.2); op.beadBorderSize = range(0.7, 1.6);
+  s.base.edge = range(0.3, 3.5); s.base.corner = rand() < 0.5 ? range(0, 20) : 0;
+  s.plaque.lineGap = range(0.2, 1.4); s.plaque.textAlign = pick(['left', 'center', 'right']);
+  s.plaque.lines.forEach((l) => { l.italic = rand() < 0.4 ? Math.floor(range(0, 20)) : 0; l.caps = pick(['', 'upper', 'lower']); });
   const ne = Math.floor(rand() * 3);
   for (let k = 0; k < ne; k++) {
-    const e = newExtra('text');
-    e.text = pick(['JANE DOE', '2026', 'Thank you']); e.anchor = pick(ANCHORS)[0]; e.mode = pick(['weld', 'engrave', 'separate']); e.size = range(3, 14); e.depth = range(0.5, 3);
+    const e = rand() < 0.3 ? Object.assign(newExtra('shape'), { shape: pick(SHAPES).id, size: range(4, 20) }) : newExtra('text');
+    if (e.type === 'text') e.text = pick(['JANE DOE', '2026', 'Thank you']);
+    e.anchor = pick(ANCHORS)[0]; e.mode = pick(['weld', 'engrave', 'separate']); if (e.type === 'text') e.size = range(3, 14); e.depth = range(0.5, 3);
     // same rules the UI applies: lettering stands upright on vertical faces and lies flat on top surfaces;
     // text dropped on the bare print bed can only be a separate piece
     e.orient = ['baseTop', 'topperTop', 'floor'].includes(e.anchor) ? 'flat' : 'upright';

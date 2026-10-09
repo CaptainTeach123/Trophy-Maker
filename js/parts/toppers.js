@@ -1,7 +1,7 @@
 // Trophy toppers. build(s, p) -> Manifold standing on z=0, centered on x=y=0, facing -Y (front).
 //   s = overall height in mm.  p = { text, font, embolden, stl: {manifold, ...}, ... }
 import {
-  Manifold, lathe, polyLathe, polys, union, cyl, ball, ellipsoid, box, tube, tubeJoined, segs, rad, starPoly, regularPoly,
+  Manifold, CrossSection, lathe, polyLathe, polys, union, cyl, ball, ellipsoid, box, tube, tubeJoined, segs, rad, starPoly, regularPoly,
   bevelSolid, standUp, stroke2d, polarArray, hullOf, bounds,
 } from '../kernel.js';
 import { textCross } from '../text.js';
@@ -477,6 +477,115 @@ function textTopper(s, p) {
   return union(parts);
 }
 
+
+/* ------------------------------------------------------------------ more toppers (v1.1) */
+const ellipse2d = (rx, ry, at = [0, 0], rot = 0, n = 48) => polys([Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return [Math.cos(a) * rx, Math.sin(a) * ry]; })]).rotate(rot).translate(at);
+
+function globe(s) {
+  const zBase = 0.13 * s, R = (s - zBase) / 2, zc = zBase + R, n = segs(R, 40);
+  const band = (rIn, rOut, w) => lathe([[rIn, -w], [rOut * 0.95, -w * 0.5], [rOut, 0], [rOut * 0.95, w * 0.5], [rIn, w]], n, 0, false);
+  const w = R * 0.07;
+  const equator = band(R * 0.9, R * 1.08, w);
+  const meridian = band(R * 0.9, R * 1.08, w).rotate([90, 0, 0]);
+  const meridian2 = band(R * 0.9, R * 1.08, w).rotate([90, 0, 60]);
+  const tilt = (m) => m.rotate([0, 23, 0]).translate([0, 0, zc]);
+  return union([foot(s, 0.17), cyl(zc, 0.045 * s, 0.045 * s), ball(R, [0, 0, zc], n), tilt(equator), tilt(meridian), tilt(meridian2)]);
+}
+function pyramid(s) {
+  const zBase = 0.08 * s, H = s - zBase, W = 0.7 * s, tiers = 4, th = (H * 0.8) / tiers;
+  const parts = [box(W * 1.04, W * 1.04, zBase + 0.6)];
+  for (let k = 0; k < tiers; k++) {
+    const w = W * (1 - 0.2 * k);
+    parts.push(box(w, w, th + 0.8, [0, 0, zBase - 0.6 + k * th]));
+  }
+  const wTop = W * (1 - 0.2 * tiers) + 0.4;
+  parts.push(Manifold.cylinder(H * 0.2 + 0.6, wTop / Math.SQRT2, 0, 4, false).rotate([0, 0, 45]).translate([0, 0, zBase + tiers * th - 0.6]));
+  return union(parts);
+}
+function crescent(s) {
+  const zBase = 0.1 * s, H = s - zBase, R = H / 2, zc = zBase + R;
+  const cs = polys([regularPoly(72, R, 0)]).subtract(polys([regularPoly(72, R * 0.8, 0)]).translate([R * 0.38, R * 0.06]));
+  const moon = bevelSolid(cs, R * 0.4, 0.45, 0.2).rotate([90, 0, 0]);
+  return union([foot(s, 0.17), cyl(zBase + 0.6 * R, 0.045 * s, 0.045 * s), moon.translate([0, 0, zc + 0.02 * s])]);
+}
+function raceFlag(s) {
+  const zBase = 0.07 * s, pr = Math.max(0.016 * s, 1.1), W = 0.56 * s, Hf = 0.4 * s, d = Math.max(0.022 * s, 2), zf = s - 0.06 * s - Hf;
+  const parts = [foot(s, 0.17), cyl(s * 0.95, pr, pr), ball(pr * 1.8, [0, 0, s - pr * 1.8])];
+  parts.push(box(W + pr, d, Hf, [pr + W / 2 - pr * 0.5 - 0.0, 0, zf]));
+  const cols = 6, rows = 4, cw = W / cols, ch = Hf / rows, t = Math.max(0.9, d * 0.5);
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) if ((i + j) % 2 === 0) parts.push(box(cw - 0.15, t + 0.3, ch - 0.15, [pr + cw * (i + 0.5), -d / 2 - t / 2 + 0.15, zf + ch * j + 0.075]));
+  return union(parts);
+}
+function sword(s) {
+  const zBase = 0.09 * s, gripTop = 0.3 * s, guardW = 0.3 * s, gd = 0.04 * s, bw = 0.075 * s;
+  const grip = lathe([[0.022 * s, zBase - 1], [0.028 * s, zBase + 0.03 * s], [0.022 * s, zBase + 0.08 * s], [0.028 * s, zBase + 0.13 * s], [0.022 * s, gripTop]], 20);
+  const bladeCs = polys([[[-bw, 0], [bw, 0], [bw * 0.9, (s - gripTop) * 0.86], [0, s - gripTop], [-bw * 0.9, (s - gripTop) * 0.86]]]);
+  const blade = bevelSolid(bladeCs, 0.045 * s, 0.1, 0.12).rotate([90, 0, 0]).translate([0, 0, gripTop - 0.6]);
+  const guard = hullOf([box(guardW, gd, 0.028 * s, [0, 0, gripTop - 0.02 * s]), ball(0.03 * s, [guardW / 2, 0, gripTop - 0.006 * s]), ball(0.03 * s, [-guardW / 2, 0, gripTop - 0.006 * s])]);
+  const pommel = ball(0.04 * s, [0, 0, zBase + 0.005 * s]);
+  return union([foot(s, 0.17), cyl(zBase + 1, 0.03 * s, 0.03 * s), grip, pommel, guard, blade]);
+}
+function musicNote(s) {
+  const hr = 0.075 * s, a = 0.2 * s, plate = 0.04 * s, zh = plate + hr * 0.75, zb = s - 0.05 * s, sr = 0.014 * s;
+  const head = (x) => ellipsoid(hr * 1.4, hr * 1.0, hr * 0.95, [x, 0, zh]);
+  const sx = (x) => x + hr * 1.25;
+  const parts = [box(2 * a + hr * 5, hr * 3.4, plate + 0.6), head(-a), head(a)];
+  for (const x of [-a, a]) parts.push(cyl(zb - zh, sr, sr, [sx(x), 0, zh]));
+  parts.push(tubeJoined([[sx(-a), 0, zb - 0.025 * s], [sx(a), 0, zb - 0.025 * s]], 0.032 * s, 10));
+  return union(parts);
+}
+function openBook(s) {
+  const zBase = 0.08 * s, H = 0.86 * s, W = 0.36 * s, t = Math.max(0.04 * s, 3), ang = 26;
+  // right-hand leaf (page + slightly larger cover behind it), hinged on the spine at x = 0, angled toward the viewer
+  const right = union([box(W, t, H, [W / 2 - 0.5, 0, 0]), box(W + 1.6, t * 0.5, H + 1.6, [W / 2 - 0.5, t * 0.5, -0.8])]).rotate([0, 0, -ang]);
+  const hr = Math.max(0.013 * s, 1);
+  return union([foot(s, 0.22), cyl(zBase + 1, hr * 2.2, hr * 2.2), union([right, right.mirror([1, 0, 0]), cyl(H, hr * 1.6, hr * 1.6, [0, 0, 0], 12)]).translate([0, 0, zBase])]);
+}
+function bulb(s) {
+  const zBase = 0.12 * s, R = 0.25 * s, zc = s - R - 0.01 * s, n = segs(R, 40);
+  const neck = lathe([[0.12 * s, zBase - 1], [0.12 * s, zBase + 0.04 * s], [0.115 * s, zBase + 0.06 * s], [0.12 * s, zBase + 0.08 * s], [0.115 * s, zBase + 0.1 * s], [0.12 * s, zBase + 0.12 * s], [0.14 * s, zc - R * 0.7], [R * 0.7, zc - R * 0.7]], 40);
+  const filament = tubeJoined([[-R * 0.25, 0, zc - R * 0.4], [-R * 0.25, 0, zc + R * 0.1], [0, 0, zc - R * 0.05], [R * 0.25, 0, zc + R * 0.1], [R * 0.25, 0, zc - R * 0.4]], R * 0.045, 8);
+  return union([foot(s, 0.17), cyl(zBase + 1, 0.06 * s, 0.06 * s), neck, ball(R, [0, 0, zc], n), filament]);
+}
+function dumbbell(s) {
+  const zBase = 0.1 * s, rP = 0.19 * s, zc = Math.min(s - rP - 0.02 * s, zBase + rP + 0.05 * s), L = 0.78 * s;
+  const horiz = (m) => m.rotate([0, 90, 0]).translate([0, 0, zc]);
+  const bar = horiz(Manifold.cylinder(L, 0.028 * s, 0.028 * s, 24, true));
+  const plates = [];
+  for (const sg of [-1, 1]) {
+    plates.push(horiz(Manifold.cylinder(0.075 * s, rP, rP, segs(rP, 32), true).translate([0, 0, sg * (L / 2 - 0.1 * s)])));
+    plates.push(horiz(Manifold.cylinder(0.075 * s, rP * 0.78, rP * 0.78, segs(rP, 32), true).translate([0, 0, sg * (L / 2 - 0.1 * s - 0.07 * s)])));
+    plates.push(horiz(Manifold.cylinder(0.03 * s, 0.045 * s, 0.045 * s, 24, true).translate([0, 0, sg * (L / 2 - 0.0 * s)])));
+  }
+  return union([foot(s, 0.19), cyl(zc, 0.045 * s, 0.045 * s), bar, ...plates]);
+}
+function microphone(s) {
+  const zBase = 0.1 * s, R = 0.16 * s, zc = s - R - 0.005 * s;
+  const handle = lathe([[0.17 * s, 0], [0.17 * s, 0.035 * s], [0.05 * s, 0.07 * s], [0.04 * s, 0.12 * s], [0.07 * s, zc - R * 0.8], [R * 0.65, zc - R * 0.75]], 40);
+  const band = lathe([[R * 0.82, -0.012 * s], [R * 1.04, -0.012 * s], [R * 1.04, 0.012 * s], [R * 0.82, 0.012 * s]], 40, 0, false).translate([0, 0, zc - R * 0.55]);
+  const head = ball(R, [0, 0, zc], segs(R, 40));
+  const bands = [-0.2, 0.3].map((k) => lathe([[R * 0.8, -0.008 * s], [R * 1.02, -0.008 * s], [R * 1.02, 0.008 * s], [R * 0.8, 0.008 * s]], 40, 0, false).translate([0, 0, zc + R * k]));
+  return union([handle, head, band, ...bands]);
+}
+function pawPrint(s) {
+  const zBase = 0.1 * s, H = s - zBase, k = H / 0.8;
+  // big palm pad + four round toes that overlap its rim, so the whole print is one piece
+  let cs = ellipse2d(0.3 * k, 0.235 * k, [0, 0.17 * k]);
+  const toes = [[-0.305, 0.3, 0, 0.1, 0.11], [-0.125, 0.47, 0, 0.1, 0.11], [0.125, 0.47, 0, 0.1, 0.11], [0.305, 0.3, 0, 0.1, 0.11]];
+  for (const [x, y, r, rx, ry] of toes) cs = cs.add(ellipse2d(rx * k, ry * k, [x * k, y * k], r));
+  const paw = bevelSolid(cs, H * 0.26, 0.5, 0.3).rotate([90, 0, 0]);
+  const b = bounds(paw);
+  return union([foot(s, 0.17), cyl(zBase + 0.1 * H, 0.05 * s, 0.05 * s), paw.translate([0, 0, zBase - b.min[2]])]);
+}
+function sunburst(s) {
+  const zBase = 0.1 * s, R = (s - zBase) / 2, zc = zBase + R;
+  const cs = polys([starPoly(16, R, R * 0.7)]).add(polys([regularPoly(64, R * 0.78, 0)]));
+  const sun = bevelSolid(cs, R * 0.34, 0.5, 0.25).rotate([90, 0, 0]);
+  const core = polys([regularPoly(64, R * 0.5, 0)]);
+  const face = Manifold.extrude(core, R * 0.34, 0, 0, 1, true).rotate([90, 0, 0]).translate([0, -R * 0.04, 0]);
+  return union([foot(s, 0.17), cyl(zc, 0.05 * s, 0.05 * s), union([sun, face]).translate([0, 0, zc])]);
+}
+
 export const TOPPERS = [
   { id: 'cup', name: 'Classic Cup', build: (s) => chalice(s) },
   { id: 'lovingCup', name: 'Loving Cup & Lid', build: (s) => lovingCup(s) },
@@ -503,6 +612,20 @@ export const TOPPERS = [
   { id: 'gear', name: 'Gear', build: (s) => gearTopper(s) },
   { id: 'gem', name: 'Gem', build: (s) => gem(s) },
   { id: 'obelisk', name: 'Obelisk', build: (s) => obelisk(s) },
+  { id: 'bowl', name: 'Champion Bowl', build: (s) => chalice(s, { thin: true, rim: 0.3, stemTop: 0.13, top: 0.93, curve: 0.55 }) },
+  { id: 'flute', name: 'Tall Flute', build: (s) => chalice(s, { handles: false, thin: true, rim: 0.1, stemTop: 0.36, top: 0.97, curve: 0.4 }) },
+  { id: 'globe', name: 'Globe', build: (s) => globe(s) },
+  { id: 'pyramid', name: 'Stepped Pyramid', build: (s) => pyramid(s) },
+  { id: 'crescent', name: 'Crescent Moon', build: (s) => crescent(s) },
+  { id: 'sunburst', name: 'Sunburst', build: (s) => sunburst(s) },
+  { id: 'flag', name: 'Checkered Flag', build: (s) => raceFlag(s) },
+  { id: 'sword', name: 'Sword', build: (s) => sword(s) },
+  { id: 'note', name: 'Music Notes', build: (s) => musicNote(s) },
+  { id: 'book', name: 'Open Book', build: (s) => openBook(s) },
+  { id: 'bulb', name: 'Light Bulb', build: (s) => bulb(s) },
+  { id: 'dumbbell', name: 'Dumbbell', build: (s) => dumbbell(s) },
+  { id: 'mic', name: 'Microphone', build: (s) => microphone(s) },
+  { id: 'paw', name: 'Paw Print', build: (s) => pawPrint(s) },
   { id: 'text', name: 'Custom Text', build: (s, p) => textTopper(s, p), custom: 'text' },
   { id: 'stl', name: 'Your STL', build: null, custom: 'stl' },
   { id: 'none', name: 'No topper', build: null },

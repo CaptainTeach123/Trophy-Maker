@@ -35,10 +35,10 @@ if (!only || only === 'topper') for (const t of TOPPERS) { if (t.id === 'stl') c
 if (!only || only === 'plaque') for (const p of PLAQUES) check('plaque:' + p.id, mk({ plaque: { style: p.id } }));
 if (!only || only === 'orn') {
   const s = defaultState();
-  Object.assign(s.orn.base, { beadsTop: true, beadsFoot: true, finials: true, feet: true });
-  Object.assign(s.orn.column, { collars: true, leaves: true });
-  Object.assign(s.orn.topper, { wings: true, halo: true });
-  Object.assign(s.orn.plaque, { border: true, doubleBorder: true, studs: true, scrolls: true, laurel: true });
+  Object.assign(s.orn.base, { beadsTop: true, beadsFoot: true, finials: true, feet: true, cordTop: true, railTop: true, railFoot: true, studRow: true, topPanel: true });
+  Object.assign(s.orn.column, { collars: true, leaves: true, bands: 2, knob: true, capital: true, skirt: true });
+  Object.assign(s.orn.topper, { wings: true, halo: true, rays: true, pedestal: true });
+  Object.assign(s.orn.plaque, { border: true, doubleBorder: true, beadBorder: true, studs: true, scrolls: true, laurel: true });
   check('all ornaments', s);
 }
 // the UI's id/name catalogue must match the real part lists (regenerate with `node tools/gen-catalog.mjs`)

@@ -1,5 +1,5 @@
 // Side panel: tabs, option cards, sliders, text/STL tools.
-import { BASES, COLUMNS, TOPPERS, PLAQUES } from './catalog.js';
+import { BASES, COLUMNS, TOPPERS, PLAQUES, SHAPES } from './catalog.js';
 import { PRESETS } from './presets.js';
 import { ANCHORS, newExtra } from './state.js';
 import { listFonts } from './fonts-meta.js';
@@ -81,6 +81,15 @@ export function initUI(app) {
     }
     return wrap;
   }
+  /** collapsible group of controls; remembers which are open across re-renders */
+  const openFolds = new Set(['base']);
+  function fold(key, title, kids, active = 0) {
+    const d = h('details', { class: 'fold' }, h('summary', {}, h('span', { text: title }), active > 0 && h('span', { class: 'badge', text: String(active) })), h('div', { class: 'fold-body' }, ...kids.filter(Boolean)));
+    d.open = openFolds.has(key);
+    d.addEventListener('toggle', () => { if (d.open) openFolds.add(key); else openFolds.delete(key); });
+    return d;
+  }
+  const count = (o, ...keys) => keys.filter((k) => o[k]).length;
   const segRow = (label, options, obj, key, cb) => h('div', { class: 'row' }, h('label', { text: label }), seg(options, obj, key, cb));
 
   function cards(kind, items, current, onPick, { wide = false } = {}) {
@@ -151,6 +160,9 @@ export function initUI(app) {
         slider('Width', b, 'width', 30, 200, 1),
         def.rect && slider('Depth', b, 'depth', 25, 200, 1),
         slider('Height', b, 'height', 10, 100, 1),
+        h('h3', { text: 'Finish' }),
+        slider('Edge softness', b, 'edge', 0.2, 4, 0.1, '×'),
+        def.rect && slider('Corner rounding', b, 'corner', 0, 30, 0.5),
       ];
     },
 
@@ -212,7 +224,9 @@ export function initUI(app) {
         segRow('Style', [['raise', 'Raised'], ['engrave', 'Engraved'], ['none', 'No text']], p, 'textMode', () => render()),
       );
       if (p.textMode !== 'none') {
-        out.push(slider('Depth', p, 'textDepth', 0.3, 3, 0.1), slider('Thicken', p, 'embolden', 0, 1.5, 0.05));
+        out.push(slider('Depth', p, 'textDepth', 0.3, 3, 0.1), slider('Thicken', p, 'embolden', 0, 1.5, 0.05),
+          slider('Line spacing', p, 'lineGap', 0.15, 1.6, 0.05, '×'),
+          segRow('Align', [['left', 'Left'], ['center', 'Center'], ['right', 'Right']], p, 'textAlign'));
         const box = h('div', { class: 'lines' });
         p.lines.forEach((ln, i) => {
           const t = h('input', { type: 'text', value: ln.text, placeholder: `Line ${i + 1}`, maxlength: 48 });
@@ -223,8 +237,13 @@ export function initUI(app) {
           sz.addEventListener('change', () => { ln.size = Math.max(1.5, Number(sz.value) || 5); changed(); });
           const del = h('button', { class: 'btn small danger', text: '✕', title: 'Remove line', type: 'button' });
           del.addEventListener('click', () => { p.lines.splice(i, 1); changed(); render(); });
+          const caps = h('select', { title: 'Letter case' }, [['', 'As typed'], ['upper', 'UPPER'], ['lower', 'lower']].map(([v, tx]) => h('option', { value: v, text: tx, selected: (ln.caps || '') === v })));
+          caps.addEventListener('change', () => { ln.caps = caps.value; changed(); });
+          const it = h('input', { type: 'number', min: 0, max: 25, step: 1, value: ln.italic || 0, title: 'Slant (degrees)' });
+          it.addEventListener('change', () => { ln.italic = Math.max(0, Math.min(25, Number(it.value) || 0)); changed(); });
           box.append(h('div', { class: 'panelbox' }, h('div', { class: 'hd' }, h('b', { text: `Line ${i + 1}` }), del),
-            h('div', { class: 'linebox' }, t, f, sz)));
+            h('div', { class: 'linebox' }, t, f, sz),
+            h('div', { class: 'linebox opts' }, h('label', { text: 'Case' }), caps, h('label', { text: 'Slant °' }), it)));
         });
         out.push(box,
           h('div', { class: 'btns' },
@@ -237,35 +256,68 @@ export function initUI(app) {
 
     details() {
       const o = S().orn;
+      const ob = o.base, oc = o.column, ot = o.topper, op = o.plaque;
       const sub = (...k) => h('div', { class: 'sub-opts' }, ...k);
+      const BEADS = [['ball', 'Pearl'], ['cube', 'Cube'], ['diamond', 'Diamond']];
       return [
         h('h2', { text: 'Ornate details' }),
-        h('p', { class: 'lead', text: 'Every detail is boolean-welded into its part, so the result stays one clean, printable solid.' }),
-        h('h3', { text: 'Base' }),
-        check('Beaded top rim', 'A row of pearls around the top edge', o.base, 'beadsTop'),
-        check('Beaded foot', 'Pearls where the base meets the table', o.base, 'beadsFoot'),
-        (o.base.beadsTop || o.base.beadsFoot) && sub(slider('Bead size', o.base, 'beadSize', 0.8, 4, 0.1, 'r'), slider('Spacing', o.base, 'beadSpacing', 3, 14, 0.5)),
-        check('Corner finials', 'Turned posts on the corners', o.base, 'finials'),
-        o.base.finials && sub(select('Style', [['urn', 'Urn'], ['ball', 'Ball'], ['spike', 'Spike'], ['cone', 'Cone'], ['pyramid', 'Pyramid']], o.base, 'finialStyle'), slider('Height', o.base, 'finialSize', 4, 30, 0.5)),
-        check('Feet', 'Lift the base on little feet', o.base, 'feet'),
-        o.base.feet && sub(select('Style', [['ball', 'Ball'], ['block', 'Block']], o.base, 'footStyle'), slider('Height', o.base, 'footHeight', 2, 14, 0.5)),
-        S().base.style === 'podium' && check('Podium numbers 1·2·3', null, o.base, 'podiumNumbers'),
-        h('h3', { text: 'Column' }),
-        check('Collar rings', 'Raised bands at both ends', o.column, 'collars'),
-        check('Leaf wrap', 'A ring of acanthus-style leaves at the foot', o.column, 'leaves'),
-        S().column.style === 'none' && h('div', { class: 'note warn', text: 'No column is selected, so column details have no effect.' }),
-        h('h3', { text: 'Topper' }),
-        check('Rear wings', 'A feathered pair rising behind the topper', o.topper, 'wings'),
-        o.topper.wings && sub(slider('Span', o.topper, 'wingSize', 0.2, 0.9, 0.01, '×'), slider('Height', o.topper, 'wingHeight', 0.1, 1, 0.01, '×')),
-        check('Star halo', 'An arc of little stars behind the topper', o.topper, 'halo'),
-        o.topper.halo && sub(slider('Reach', o.topper, 'haloSize', 0.1, 0.8, 0.01, '×'), slider('Stars', o.topper, 'haloStars', 3, 11, 2, '')),
-        h('h3', { text: 'Plaque' }),
-        check('Raised border', 'A framed edge around the text', o.plaque, 'border'),
-        o.plaque.border && sub(check('Double border', null, o.plaque, 'doubleBorder')),
-        check('Corner rivets', null, o.plaque, 'studs'),
-        check('Side scrolls', 'Curled flourishes at both ends', o.plaque, 'scrolls'),
-        check('Laurel sprigs', 'Leaves flanking the plate', o.plaque, 'laurel'),
-        S().plaque.mount === 'none' && h('div', { class: 'note warn', text: 'The plaque is turned off, so plaque details are hidden.' }),
+        h('p', { class: 'lead', text: 'Every detail is boolean-welded into its part, so the result stays one clean, printable solid. Open a group to switch things on.' }),
+        fold('base', 'Base', [
+          check('Beaded top rim', 'A row of beads around the top edge', ob, 'beadsTop'),
+          check('Beaded foot', 'Beads where the base meets the table', ob, 'beadsFoot'),
+          (ob.beadsTop || ob.beadsFoot) && sub(select('Bead shape', BEADS, ob, 'beadShape'), slider('Bead size', ob, 'beadSize', 0.8, 4, 0.1, 'r'), slider('Spacing', ob, 'beadSpacing', 3, 14, 0.5)),
+          check('Rope top rim', 'A continuous cord along the top edge', ob, 'cordTop'),
+          check('Rope foot', 'A continuous cord around the bottom', ob, 'cordFoot'),
+          (ob.cordTop || ob.cordFoot) && sub(slider('Cord thickness', ob, 'cordSize', 0.8, 3.5, 0.1, 'r')),
+          check('Moulded top rail', 'A stepped moulding just below the top edge', ob, 'railTop'),
+          check('Moulded foot rail', 'A stepped moulding just above the floor', ob, 'railFoot'),
+          (ob.railTop || ob.railFoot) && sub(slider('Rail depth', ob, 'railSize', 0.6, 3.5, 0.1)),
+          check('Stud band', 'A ring of round studs around the sides (front is left clear)', ob, 'studRow'),
+          ob.studRow && sub(slider('Height on base', ob, 'studZ', 0.15, 0.85, 0.01, '×'), slider('Stud size', ob, 'studSize', 0.8, 4, 0.1, 'r'), slider('Spacing', ob, 'studSpacing', 4, 20, 0.5)),
+          check('Raised top panel', 'A low plate under the column', ob, 'topPanel'),
+          ob.topPanel && sub(slider('Inset', ob, 'panelInset', 1, 20, 0.5), slider('Height', ob, 'panelHeight', 0.6, 5, 0.1)),
+          check('Corner finials', 'Turned posts on the corners', ob, 'finials'),
+          ob.finials && sub(select('Style', [['urn', 'Urn'], ['ball', 'Ball'], ['flame', 'Flame'], ['acorn', 'Acorn'], ['spike', 'Spike'], ['cone', 'Cone'], ['pyramid', 'Pyramid']], ob, 'finialStyle'), slider('Height', ob, 'finialSize', 4, 30, 0.5)),
+          check('Feet', 'Lift the base on little feet', ob, 'feet'),
+          ob.feet && sub(select('Style', [['ball', 'Ball'], ['bun', 'Bun'], ['cone', 'Tapered'], ['block', 'Block']], ob, 'footStyle'), slider('Height', ob, 'footHeight', 2, 14, 0.5)),
+          S().base.style === 'podium' && check('Podium numbers 1·2·3', null, ob, 'podiumNumbers'),
+        ], count(ob, 'beadsTop', 'beadsFoot', 'cordTop', 'cordFoot', 'railTop', 'railFoot', 'studRow', 'topPanel', 'finials', 'feet')),
+        fold('column', 'Column', [
+          S().column.style === 'none' && h('div', { class: 'note warn', text: 'No column is selected, so column details have no effect.' }),
+          check('Collar rings', 'Raised bands at both ends', oc, 'collars'),
+          check('Leaf wrap', 'A ring of acanthus-style leaves at the foot', oc, 'leaves'),
+          check('Capital', 'A flared cap under the topper', oc, 'capital'),
+          check('Skirt', 'A flared foot where the column meets the base', oc, 'skirt'),
+          check('Centre knob', 'A ball swelling halfway up', oc, 'knob'),
+          oc.knob && sub(slider('Knob size', oc, 'knobSize', 1, 2.6, 0.05, '×')),
+          h('div', { class: 'row' }, h('label', { text: 'Decorative bands' }), h('div', { class: 'sl' }, (() => {
+            const r = h('input', { type: 'range', min: 0, max: 6, step: 1, value: oc.bands });
+            const n = h('input', { type: 'number', min: 0, max: 6, step: 1, value: oc.bands });
+            r.addEventListener('input', () => { oc.bands = Number(r.value); n.value = r.value; changed(); });
+            n.addEventListener('change', () => { oc.bands = Math.max(0, Math.min(6, Number(n.value) || 0)); r.value = oc.bands; changed(); });
+            return [r, n];
+          })().flat(), h('span', { class: 'u', text: '' }))),
+        ], count(oc, 'collars', 'leaves', 'capital', 'skirt', 'knob') + (oc.bands > 0 ? 1 : 0)),
+        fold('topper', 'Topper', [
+          check('Rear wings', 'A feathered pair rising behind the topper', ot, 'wings'),
+          ot.wings && sub(slider('Span', ot, 'wingSize', 0.2, 0.9, 0.01, '×'), slider('Height', ot, 'wingHeight', 0.1, 1, 0.01, '×')),
+          check('Star halo', 'An arc of little stars behind the topper', ot, 'halo'),
+          ot.halo && sub(slider('Reach', ot, 'haloSize', 0.1, 0.8, 0.01, '×'), slider('Stars', ot, 'haloStars', 3, 11, 2, '')),
+          check('Sun rays', 'A fan of rays radiating behind the topper', ot, 'rays'),
+          ot.rays && sub(slider('Rays', ot, 'rayCount', 6, 30, 1, ''), slider('Length', ot, 'rayLength', 0.08, 0.6, 0.01, '×')),
+          check('Stepped pedestal', 'Two small discs under the topper', ot, 'pedestal'),
+        ], count(ot, 'wings', 'halo', 'rays', 'pedestal')),
+        fold('plaque', 'Plaque', [
+          S().plaque.mount === 'none' && h('div', { class: 'note warn', text: 'The plaque is turned off, so plaque details are hidden.' }),
+          check('Raised border', 'A framed edge around the text', op, 'border'),
+          op.border && sub(check('Double border', null, op, 'doubleBorder'), slider('Border width', op, 'borderWidth', 0.5, 2.5, 0.05, '×')),
+          check('Pearl border', 'A row of beads inside the frame', op, 'beadBorder'),
+          op.beadBorder && sub(slider('Pearl size', op, 'beadBorderSize', 0.6, 1.8, 0.05, '×')),
+          check('Corner studs', 'Ornaments in the four corners', op, 'studs'),
+          op.studs && sub(select('Style', [['ball', 'Rivet'], ['star', 'Star'], ['diamond', 'Diamond'], ['square', 'Square'], ['flower', 'Flower']], op, 'studStyle'), slider('Size', op, 'studSize', 0.6, 2, 0.05, '×')),
+          check('Side scrolls', 'Curled flourishes at both ends', op, 'scrolls'),
+          check('Laurel sprigs', 'Leaves flanking the plate', op, 'laurel'),
+        ], count(op, 'border', 'beadBorder', 'studs', 'scrolls', 'laurel')),
       ];
     },
 
@@ -275,6 +327,7 @@ export function initUI(app) {
         h('p', { class: 'lead', text: 'Add your own lettering or STL models anywhere on the trophy. Weld them in, engrave them, or keep them as separate pieces.' }),
         h('div', { class: 'btns' },
           h('button', { class: 'btn', text: '＋ Text', onClick: () => { S().extras.push(newExtra('text')); changed(); render(); } }),
+          h('button', { class: 'btn', text: '＋ Shape', onClick: () => { S().extras.push(newExtra('shape')); changed(); render(); } }),
           h('button', { class: 'btn', text: '＋ STL model', onClick: () => { S().extras.push(newExtra('stl')); changed(); render(); } }),
           fontUploadBtn()),
       ];
@@ -326,22 +379,25 @@ export function initUI(app) {
 
   /* ---------------------------------------------------------------- extras editor */
   function extraBox(ex, i) {
-    const isText = ex.type === 'text';
+    const isText = ex.type === 'text', isShape = ex.type === 'shape', flatable = isText || isShape;
     const del = h('button', { class: 'btn small danger', text: '✕', title: 'Remove', type: 'button', onClick: () => { S().extras.splice(i, 1); changed(); render(); } });
     const faces = ['baseFront', 'baseBack', 'baseLeft', 'baseRight', 'plaqueFront', 'column'];
-    const box = h('div', { class: 'panelbox' }, h('div', { class: 'hd' }, h('b', { text: isText ? `Text: “${(ex.text || '').slice(0, 18)}”` : 'STL model' }), del));
-    if (isText) {
+    const box = h('div', { class: 'panelbox' }, h('div', { class: 'hd' }, h('b', { text: isText ? `Text: “${(ex.text || '').slice(0, 18)}”` : isShape ? `Shape: ${(SHAPES.find((x) => x.id === ex.shape) || SHAPES[0]).name}` : 'STL model' }), del));
+    if (isShape) {
+      box.append(select('Shape', SHAPES.map((x) => [x.id, x.name]), ex, 'shape', () => render()), slider('Size', ex, 'size', 3, 80, 0.5), slider('Depth', ex, 'depth', 0.3, 12, 0.1));
+    } else if (isText) {
       box.append(textInput('Text', ex, 'text', 'Your text'), fontSelect('Font', ex, 'font'),
         slider('Letter size', ex, 'size', 2, 60, 0.5), slider('Depth', ex, 'depth', 0.3, 12, 0.1), slider('Thicken', ex, 'embolden', 0, 2, 0.05));
     } else {
       box.append(...stlPicker(ex, 'assetId'), slider('Scale', ex, 'scale', 5, 600, 1, '%'), slider('Or fit size', ex, 'fitHeight', 0, 250, 1, 'mm'),
         slider('Rotate X', ex, 'rx', -180, 180, 5, '°'), slider('Rotate Y', ex, 'ry', -180, 180, 5, '°'), slider('Rotate Z', ex, 'rz', -180, 180, 5, '°'));
     }
-    box.append(select('Place on', ANCHORS, ex, 'anchor', () => { if (isText && !faces.includes(ex.anchor) && ex.orient === 'upright') ex.orient = 'flat'; if (isText && faces.includes(ex.anchor)) ex.orient = 'upright'; render(); }));
+    box.append(select('Place on', ANCHORS, ex, 'anchor', () => { if (flatable && !faces.includes(ex.anchor) && ex.orient === 'upright') ex.orient = 'flat'; if (flatable && faces.includes(ex.anchor)) ex.orient = 'upright'; render(); }));
+    if (isShape) box.append(segRow('Orientation', [['upright', 'Upright'], ['flat', 'Lying flat']], ex, 'orient'));
     if (isText) box.append(segRow('Lettering', [['upright', 'Upright'], ['flat', 'Lying flat']], ex, 'orient'), segRow('Align', [['left', 'Left'], ['center', 'Center'], ['right', 'Right']], ex, 'align'));
     box.append(segRow('Mode', [['weld', 'Weld on'], ['engrave', 'Engrave'], ['separate', 'Separate']], ex, 'mode'),
       slider('Move sideways', ex, 'ox', -100, 100, 0.5), slider('Move up', ex, 'oz', -100, 100, 0.5), slider('Push in/out', ex, 'oy', -40, 40, 0.5));
-    if (isText) box.append(slider('Rotate', ex, 'rz', -180, 180, 1, '°'));
+    if (flatable) box.append(slider('Rotate', ex, 'rz', -180, 180, 1, '°'));
     return box;
   }
 

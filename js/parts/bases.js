@@ -10,6 +10,8 @@ import { Manifold, hullOf, union, polyLathe, polys, rad, segs } from '../kernel.
 import { textCross } from '../text.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+/** edge softness multiplier (UI slider), applied to the chamfers of the simple styles */
+const E = (p) => clamp(p.edge ?? 1, 0.2, 4);
 
 /* ----- rectangular stack of frusta (profile entries are [inset, z]) ----- */
 function rectRing(hw, hd, inset, z, cr) {
@@ -67,7 +69,8 @@ function rectBase(p, prof, o = {}) {
   const hw = p.width / 2, hd = p.depth / 2, h = p.height;
   const maxIn = Math.min(hw, hd) * 0.92;
   prof = monotone(prof.map(([i, z]) => [Math.min(i, maxIn), z]));
-  const solid = rectStack(hw, hd, prof, o.cr || 0);
+  const cr = Math.max(o.cr || 0, Math.min(p.corner || 0, Math.min(hw, hd) * 0.6));
+  const solid = rectStack(hw, hd, prof, cr);
   const topInset = prof[prof.length - 1][0];
   const [b0, b1] = o.band || [h * 0.12, h * 0.78];
   const zm = (b0 + b1) / 2;
@@ -78,8 +81,9 @@ function rectBase(p, prof, o = {}) {
     topHalf: [hw - topInset, hd - topInset],
     mount: { y: -(hd - ins), z: zm, tilt: o.tilt || 0, maxW: 2 * (hw - ins) - 4, maxH: b1 - b0, back: hd },
     halfAt: (z) => { const i = insetAt(prof, clamp(z, 0, prof[prof.length - 1][1])); return [hw - i, hd - i]; },
-    topPoly: rectPoly(hw, hd, topInset, o.cr || 0),
-    footPoly: rectPoly(hw, hd, 0, o.cr || 0),
+    outlineAt: (z) => rectPoly(hw, hd, insetAt(prof, clamp(z, 0, prof[prof.length - 1][1])), cr),
+    topPoly: rectPoly(hw, hd, topInset, cr),
+    footPoly: rectPoly(hw, hd, 0, cr),
     round: false,
   };
 }
@@ -113,24 +117,31 @@ function lathedBase(p, n, rProf, o = {}) {
     topHalf: [topR, topR * sy],
     mount: { y: -ap * sy, z: zm, tilt: o.tilt || 0, maxW: round ? ap * 1.5 : 2 * ap * Math.tan(Math.PI / n) - 4, maxH: b1 - b0, back: ap * sy, curved: round ? { a: ap, b: ap * sy } : null },
     halfAt: (z) => { const r = rAt(clamp(z, 0, h)); return [r, r * sy]; },
+    outlineAt: (z) => { const r = rAt(clamp(z, 0, h)); return round ? circlePoly(r, 48).map(([x, y]) => [x, y * sy]) : ngonPoly(n, r, o.rot || 0); },
     topPoly,
     footPoly,
     round,
   };
 }
 
+/** foot / die / cap moulding shared by the plinth styles */
+function mouldedProfile(R, h) {
+  const s = Math.min(R * 0.06, h * 0.045);
+  return [[R, 0], [R, h * 0.12], [R - s, h * 0.12 + s], [R - s * 2, h * 0.12 + s * 2], [R - s * 2, h * 0.8], [R - s, h * 0.8 + s * 0.5], [R, h * 0.8 + s], [R, h * 0.92], [R - s * 0.8, h]];
+}
+
 export const BASES = [
   {
     id: 'block', name: 'Classic Block', rect: true,
     build: (p) => {
-      const c = Math.min(3, p.height * 0.18);
+      const c = Math.min(3 * E(p), p.height * 0.18);
       return rectBase(p, [[0, 0], [0, p.height - c], [c, p.height]], { band: [3, p.height - c - 2] });
     },
   },
   {
     id: 'rounded', name: 'Soft Block', rect: true,
     build: (p) => {
-      const c = Math.min(3, p.height * 0.18);
+      const c = Math.min(3 * E(p), p.height * 0.18);
       return rectBase(p, [[0, 0], [0, p.height - c], [c, p.height]], { cr: Math.min(p.width, p.depth) * 0.12, band: [3, p.height - c - 2] });
     },
   },
@@ -189,6 +200,7 @@ export const BASES = [
         topHalf: [hw, (hd - yb) / 2],
         mount: { y, z, tilt: lean, maxW: p.width - 6, maxH: Math.hypot(run, rise) * 0.8, back: hd - y, onSlope: true },
         halfAt: () => [hw, hd],
+        outlineAt: (z) => { const yf = z <= hf ? -hd : -hd + ((z - hf) / rise) * run; return [[-hw, yf], [hw, yf], [hw, hd], [-hw, hd]]; },
         topPoly: rectPoly(hw, (hd - yb) / 2, 0).map(([x, yy]) => [x, yy + (yb + hd) / 2]),
         footPoly: rectPoly(hw, hd, 0),
         round: false,
@@ -231,11 +243,11 @@ export const BASES = [
   },
   {
     id: 'round', name: 'Round Disc',
-    build: (p) => lathedBase(p, 96, (R, h) => { const c = Math.min(3, h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { band: [3, p.height - 5] }),
+    build: (p) => lathedBase(p, 96, (R, h) => { const c = Math.min(3 * E(p), h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { band: [3, p.height - 5] }),
   },
   {
     id: 'oval', name: 'Oval Plaque Base', rect: true,
-    build: (p) => lathedBase(p, 96, (R, h) => { const c = Math.min(3, h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { oval: true, band: [3, p.height - 5] }),
+    build: (p) => lathedBase(p, 96, (R, h) => { const c = Math.min(3 * E(p), h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { oval: true, band: [3, p.height - 5] }),
   },
   {
     id: 'roundTier', name: 'Round Tiered',
@@ -259,7 +271,7 @@ export const BASES = [
   },
   {
     id: 'hex', name: 'Hexagon',
-    build: (p) => lathedBase(p, 6, (R, h) => { const c = Math.min(3, h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { rot: 0, band: [3, p.height - 5] }),
+    build: (p) => lathedBase(p, 6, (R, h) => { const c = Math.min(3 * E(p), h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { rot: 0, band: [3, p.height - 5] }),
   },
   {
     id: 'hexTier', name: 'Hexagon Stepped',
@@ -270,7 +282,7 @@ export const BASES = [
   },
   {
     id: 'oct', name: 'Octagon',
-    build: (p) => lathedBase(p, 8, (R, h) => { const c = Math.min(3, h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { rot: 22.5, band: [3, p.height - 5] }),
+    build: (p) => lathedBase(p, 8, (R, h) => { const c = Math.min(3 * E(p), h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { rot: 22.5, band: [3, p.height - 5] }),
   },
   {
     id: 'oct2', name: 'Octagon Plinth',
@@ -278,6 +290,74 @@ export const BASES = [
       const s = Math.min(R * 0.06, h * 0.045);
       return [[R, 0], [R, h * 0.12], [R - s, h * 0.12 + s], [R - s * 2, h * 0.12 + s * 2], [R - s * 2, h * 0.8], [R - s, h * 0.8 + s * 0.5], [R, h * 0.8 + s], [R, h * 0.92], [R - s * 0.8, h]];
     }, { rot: 22.5, band: [p.height * 0.2, p.height * 0.76] }),
+  },
+
+  {
+    id: 'deco', name: 'Art Deco Steps', rect: true,
+    build: (p) => {
+      const h = p.height, W = Math.min(p.width, p.depth) / 2, a = W * 0.07, c = Math.min(1.5 * E(p), h * 0.04);
+      return rectBase(p, [[0, 0], [0, h * 0.46], [a, h * 0.46], [a, h * 0.64], [a * 2, h * 0.64], [a * 2, h * 0.82], [a, h * 0.82], [a, h - c], [a + c, h]], { band: [2, h * 0.46 - 1.5] });
+    },
+  },
+  {
+    id: 'softTier', name: 'Soft Two-Tier', rect: true,
+    build: (p) => {
+      const h = p.height, W = Math.min(p.width, p.depth) / 2, c = Math.min(2 * E(p), h * 0.06), ins = W * 0.17;
+      return rectBase(p, [[0, 0], [0, h * 0.6 - c], [c, h * 0.6], [ins, h * 0.6], [ins, h - c], [ins + c, h]], { cr: W * 0.22, band: [2, h * 0.6 - c - 2] });
+    },
+  },
+  {
+    id: 'table', name: 'Slab on Legs', rect: true,
+    build: (p) => {
+      const h = p.height, hw = p.width / 2, hd = p.depth / 2;
+      const legH = h * 0.45, c = Math.min(2 * E(p), (h - legH) * 0.2);
+      const tcr = Math.min(p.corner || 0, Math.min(hw, hd) * 0.6);
+      const slab = rectStack(hw, hd, [[0, legH], [0, h - c], [c, h]], tcr);
+      const lr = Math.min(hw, hd) * 0.09, lx = hw - lr * 1.7, ly = hd - lr * 1.7;
+      const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => Manifold.cylinder(legH + 0.8, lr * 1.15, lr * 0.85, segs(lr * 1.15, 16), false).translate([sx * lx, sy * ly, 0]));
+      return {
+        solid: union([slab, ...legs]),
+        top: [0, 0, h],
+        topHalf: [hw - c, hd - c],
+        mount: { y: -hd, z: (legH + h - c) / 2, tilt: 0, maxW: 2 * hw - 4, maxH: h - c - legH - 2, back: hd * 2 },
+        halfAt: () => [hw, hd],
+        outlineAt: (z) => (z < legH + 0.5 ? null : rectPoly(hw, hd, Math.max(0, z - (h - c)), tcr)),
+        topPoly: rectPoly(hw, hd, c, tcr),
+        footPoly: rectPoly(lx, ly, 0),
+        legs: true, // the foot outline is only supported at its corners
+        round: false,
+      };
+    },
+  },
+  {
+    id: 'drum', name: 'Banded Drum',
+    build: (p) => lathedBase(p, 96, (R, h) => {
+      const c = Math.min(2.5 * E(p), h * 0.12), g = R * 0.05;
+      return [[R, 0], [R, h * 0.2], [R - g, h * 0.22], [R - g, h * 0.28], [R, h * 0.3], [R, h * 0.7], [R - g, h * 0.72], [R - g, h * 0.78], [R, h * 0.8], [R, h - c], [R - c, h]];
+    }, { band: [p.height * 0.3 + 1.5, p.height * 0.7 - 1.5] }),
+  },
+  {
+    id: 'ringFoot', name: 'Ring-Foot Pedestal',
+    build: (p) => lathedBase(p, 96, (R, h) => [[R, 0], [R, h * 0.12], [R * 0.82, h * 0.17], [R * 0.62, h * 0.22], [R * 0.62, h * 0.78], [R * 0.82, h * 0.83], [R, h * 0.88], [R, h]], { band: [p.height * 0.27, p.height * 0.73] }),
+  },
+  {
+    id: 'roundPlinth', name: 'Round Plinth',
+    build: (p) => lathedBase(p, 96, (R, h) => mouldedProfile(R, h), { band: [p.height * 0.2, p.height * 0.76] }),
+  },
+  {
+    id: 'ovalTier', name: 'Oval Tiered', rect: true,
+    build: (p) => lathedBase(p, 96, (R, h) => {
+      const c = Math.min(2 * E(p), h * 0.07);
+      return [[R, 0], [R, h * 0.5 - c], [R - c, h * 0.5], [R * 0.76, h * 0.5], [R * 0.76, h - c], [R * 0.76 - c, h]];
+    }, { oval: true, band: [2, p.height * 0.5 - 3] }),
+  },
+  {
+    id: 'pent', name: 'Pentagon',
+    build: (p) => lathedBase(p, 5, (R, h) => { const c = Math.min(3 * E(p), h * 0.18); return [[R, 0], [R, h - c], [R - c, h]]; }, { rot: 18, band: [3, p.height - 5] }),
+  },
+  {
+    id: 'hexPlinth', name: 'Hexagon Plinth',
+    build: (p) => lathedBase(p, 6, (R, h) => mouldedProfile(R, h), { rot: 0, band: [p.height * 0.2, p.height * 0.76] }),
   },
 ];
 

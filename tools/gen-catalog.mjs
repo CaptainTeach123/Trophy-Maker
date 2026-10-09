@@ -8,6 +8,7 @@ import { BASES } from '../js/parts/bases.js';
 import { COLUMNS } from '../js/parts/columns.js';
 import { TOPPERS } from '../js/parts/toppers.js';
 import { PLAQUES } from '../js/parts/plaques.js';
+import { SHAPES } from '../js/parts/shapes.js';
 
 export function catalogSource() {
   const j = (v) => JSON.stringify(v).replace(/"([a-zA-Z]+)":/g, '$1: ').replace(/,/g, ', ').replace(/\{/g, '{ ').replace(/\}/g, ' }');
@@ -16,7 +17,8 @@ export function catalogSource() {
     + list('BASES', BASES.map((b) => ({ id: b.id, name: b.name, rect: !!b.rect })))
     + list('COLUMNS', COLUMNS.map((c) => ({ id: c.id, name: c.name, solid: !!c.build })))
     + list('TOPPERS', TOPPERS.map((t) => ({ id: t.id, name: t.name, solid: !!t.build, ...(t.custom ? { custom: t.custom } : {}) })))
-    + list('PLAQUES', PLAQUES.map((p) => ({ id: p.id, name: p.name })));
+    + list('PLAQUES', PLAQUES.map((p) => ({ id: p.id, name: p.name })))
+    + list('SHAPES', SHAPES.map((p) => ({ id: p.id, name: p.name })));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = path.join(path.dirname(fileURLToPath(import.meta.url)), '../js/catalog.js');

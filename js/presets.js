@@ -105,4 +105,49 @@ export const PRESETS = [
       topper: { style: 'rocket', size: 120 }, plaque: { style: 'oval', width: 56, height: 20, lines: [{ text: 'MISSION', font: 'orbitron', size: 5 }, { text: 'ACCOMPLISHED', font: 'orbitron', size: 3 }] },
     },
   },
+  {
+    id: 'artdeco', name: 'Art Deco Gala', blurb: 'Sunburst on a stepped deco plinth',
+    patch: {
+      base: { style: 'deco', width: 92, depth: 70, height: 44 }, column: { style: 'oct', height: 16, radius: 8 },
+      topper: { style: 'sunburst', size: 100 },
+      plaque: { style: 'octagon', width: 70, height: 22, lines: [{ text: 'GOLDEN GALA', font: 'cinzelDeco', size: 5.2 }, { text: 'Best Dressed', font: 'cinzelDeco', size: 3.2 }] },
+      orn: { base: { railTop: true, railFoot: true }, plaque: { border: true, studs: true, studStyle: 'diamond' } },
+    },
+  },
+  {
+    id: 'globetrot', name: 'Globe Trotter', blurb: 'Globe on a banded drum',
+    patch: {
+      base: { style: 'drum', width: 84, height: 34 }, column: { style: 'discs', height: 18, radius: 6 },
+      topper: { style: 'globe', size: 94 },
+      plaque: { style: 'swallow', width: 66, height: 18, lines: [{ text: 'WORLD TRAVELLER', font: 'cinzel', size: 4.6 }, { text: 'Est. 2026', font: 'cinzel', size: 3 }] },
+      orn: { base: { cordTop: true }, column: { capital: true, skirt: true } },
+    },
+  },
+  {
+    id: 'racing', name: 'Race Day', blurb: 'Checkered flag with a sun-ray fan',
+    patch: {
+      base: { style: 'slope', width: 96, depth: 64, height: 36 }, column: { style: 'none' },
+      topper: { style: 'flag', size: 104 },
+      plaque: { style: 'slant', width: 70, height: 18, lines: [{ text: 'POLE POSITION', font: 'russo', size: 5, italic: 12 }, { text: 'Fastest Lap', font: 'russo', size: 3.4, italic: 12 }] },
+      orn: { plaque: { border: true } },
+    },
+  },
+  {
+    id: 'bard', name: 'Music Award', blurb: 'Notes on a round plinth',
+    patch: {
+      base: { style: 'roundPlinth', width: 82, height: 36 }, column: { style: 'urn', height: 28, radius: 8 },
+      topper: { style: 'note', size: 92 },
+      plaque: { style: 'ticket', width: 56, height: 20, lines: [{ text: 'BEST PERFORMANCE', font: 'playfair', size: 4.2 }, { text: 'Live on Stage', font: 'greatVibes', size: 5 }] },
+      orn: { base: { beadsTop: true, beadShape: 'ball' }, plaque: { beadBorder: true } },
+    },
+  },
+  {
+    id: 'pet', name: 'Good Boy', blurb: 'Paw print on a soft two-tier base',
+    patch: {
+      base: { style: 'softTier', width: 88, depth: 76, height: 38, corner: 10 }, column: { style: 'none' },
+      topper: { style: 'paw', size: 86 },
+      plaque: { style: 'stadium', width: 62, height: 18, lines: [{ text: 'GOOD BOY', font: 'pacifico', size: 6 }, { text: 'Best in Show', font: 'oswald', size: 3.2 }] },
+      orn: { plaque: { studs: true, studStyle: 'flower' } },
+    },
+  },
 ];

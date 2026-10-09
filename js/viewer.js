@@ -21,10 +21,11 @@ export class Viewer {
     this.renderer.shadowMap.autoUpdate = false; // the shadow only depends on the model: redraw it when the model changes
     this.renderer.shadowMap.needsUpdate = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.85;
     this.scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.65; // softer image-based light so metals do not blow out
     this.scene.background = new THREE.Color(0x15171c);
 
     this.camera = new THREE.PerspectiveCamera(32, 1, 1, 4000);
@@ -36,7 +37,7 @@ export class Viewer {
     this.controls.target.set(0, 0, 80);
     this.controls.maxPolarAngle = Math.PI * 0.52;
 
-    const key = new THREE.DirectionalLight(0xffffff, 1.9);
+    const key = new THREE.DirectionalLight(0xffffff, 1.15);
     key.position.set(-180, -260, 420);
     key.castShadow = true;
     key.shadow.mapSize.set(1536, 1536);
@@ -44,10 +45,10 @@ export class Viewer {
     key.shadow.bias = -0.0004;
     key.shadow.normalBias = 0.6;
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0x9db8ff, 0.5);
+    const fill = new THREE.DirectionalLight(0x9db8ff, 0.3);
     fill.position.set(300, -120, 150);
     this.scene.add(fill);
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x303038, 0.35));
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x303038, 0.3));
 
     this.bed = new THREE.Group();
     this.scene.add(this.bed);

@@ -2,8 +2,9 @@
 import { Manifold, polys, union, box, ball, cyl, rad, ellipsoid, stroke2d, quality } from '../kernel.js';
 import { textCross } from '../text.js';
 import { shieldPoly } from './toppers.js';
-import { plaqueOrnaments } from './ornaments.js';
+import { plaqueOrnaments, edgePoints } from './ornaments.js';
 
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const arc = (cx, cy, r, a0, a1, n = 12) => Array.from({ length: n + 1 }, (_, i) => {
   const a = rad(a0 + ((a1 - a0) * i) / n);
   return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
@@ -53,6 +54,44 @@ export const PLAQUES = [
       return cs;
     },
   },
+  {
+    id: 'octagon', name: 'Octagon', fit: [0.86, 0.78],
+    outline: (w, h) => { const c = Math.min(w, h) * 0.3; return [[-w / 2 + c, -h / 2], [w / 2 - c, -h / 2], [w / 2, -h / 2 + c], [w / 2, h / 2 - c], [w / 2 - c, h / 2], [-w / 2 + c, h / 2], [-w / 2, h / 2 - c], [-w / 2, -h / 2 + c]]; },
+  },
+  {
+    id: 'swallow', name: 'Swallowtail Ribbon', fit: [0.76, 0.74],
+    outline: (w, h) => { const n = Math.min(w * 0.12, h * 0.6); return [[-w / 2, h / 2], [w / 2, h / 2], [w / 2 - n, 0], [w / 2, -h / 2], [-w / 2, -h / 2], [-w / 2 + n, 0]].map(([x, y]) => [x, y]); },
+  },
+  {
+    id: 'arrow', name: 'Pointer', fit: [0.74, 0.76],
+    outline: (w, h) => { const t = Math.min(h * 0.7, w * 0.3); return [[-w / 2, -h / 2], [w / 2 - t, -h / 2], [w / 2, 0], [w / 2 - t, h / 2], [-w / 2, h / 2]]; },
+  },
+  {
+    id: 'keystone', name: 'Keystone', fit: [0.74, 0.76],
+    outline: (w, h) => { const k = Math.min(w * 0.16, h * 0.6); return [[-w / 2 + k, -h / 2], [w / 2 - k, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]; },
+  },
+  {
+    id: 'slant', name: 'Slanted', fit: [0.8, 0.8],
+    outline: (w, h) => { const k = Math.min(w * 0.12, h * 0.5); return [[-w / 2, -h / 2], [w / 2 - k, -h / 2], [w / 2, h / 2], [-w / 2 + k, h / 2]]; },
+  },
+  {
+    id: 'scallop', name: 'Scalloped', fit: [0.88, 0.62], cs: true,
+    outline: (w, h) => {
+      const n = Math.max(3, Math.round(w / 14)), r = w / n / 2;
+      let cs = polys([[[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]]]);
+      for (let i = 0; i < n; i++) for (const sy of [-1, 1]) cs = cs.subtract(polys([arc(0, 0, r * 0.86, 0, 360, 20)]).translate([-w / 2 + r * (2 * i + 1), sy * (h / 2 + r * 0.25)]));
+      return cs;
+    },
+  },
+  {
+    id: 'ticket', name: 'Ticket', fit: [0.8, 0.78], cs: true,
+    outline: (w, h) => {
+      const r = Math.min(h * 0.22, w * 0.1);
+      let cs = polys([roundedRect(w, h, Math.min(w, h) * 0.08, 6)]);
+      for (const sx of [-1, 1]) cs = cs.subtract(polys([arc(0, 0, r, 0, 360, 24)]).translate([sx * w / 2, 0]));
+      return cs;
+    },
+  },
 ];
 export function getPlaque(id) { return PLAQUES.find((p) => p.id === id) || PLAQUES[0]; }
 
@@ -84,7 +123,7 @@ export function buildPlaque(pl, o = {}) {
   const parts = [plate];
 
   // border frames
-  const bw = Math.max(0.8, Math.min(2.2, Math.min(w, h) * 0.07));
+  const bw = Math.max(0.8, Math.min(2.2, Math.min(w, h) * 0.07)) * (orn.borderWidth ?? 1);
   const bh = Math.min(1.4, t * 0.55);
   let innerInset = bevel + 1.2;
   if (orn.border) {
@@ -98,6 +137,17 @@ export function buildPlaque(pl, o = {}) {
     }
   }
 
+  // a row of beads inside the frame (pearl border)
+  if (orn.beadBorder) {
+    const r = clamp(Math.min(w, h) * 0.04, 0.8, 1.5) * (orn.beadBorderSize ?? 1);
+    const ringCs = outline.offset(-(innerInset + r - 0.3), 'Miter', 2);
+    const poly = ringCs.isEmpty() ? null : ringCs.toPolygons().sort((a, b) => b.length - a.length)[0];
+    if (poly && poly.length > 2) {
+      for (const { p } of edgePoints(poly, r * 2.3, 0)) parts.push(ball(r, [p[0], p[1], t + r * 0.1], 10));
+      innerInset += r * 2 + 1.0;
+    }
+  }
+
   // text
   const lines = (pl.lines || []).filter((l) => l.text && l.text.trim());
   let textSolid = null;
@@ -105,7 +155,7 @@ export function buildPlaque(pl, o = {}) {
   if (lines.length && pl.textMode !== 'none') {
     const usableW = Math.max(4, (w - 2 * innerInset) * def.fit[0]);
     const usableH = Math.max(3, (h - 2 * innerInset) * def.fit[1]);
-    const gapK = 0.55;
+    const gapK = clamp(pl.lineGap ?? 0.55, 0.15, 1.6);
     const sizes = lines.map((l) => l.size);
     let total = sizes.reduce((a, b) => a + b, 0) + gapK * (sizes.reduce((a, b) => a + b, 0) / sizes.length) * (lines.length - 1);
     const k = Math.min(1, usableH / total);
@@ -114,7 +164,9 @@ export function buildPlaque(pl, o = {}) {
     const meshes = [];
     lines.forEach((l, i) => {
       const sz = l.size * k;
-      const cs = textCross(l.font, l.text, sz, { embolden: pl.embolden || 0, spacing: l.spacing || 0, maxWidth: usableW });
+      const str = l.caps === 'upper' ? l.text.toUpperCase() : l.caps === 'lower' ? l.text.toLowerCase() : l.text;
+      let cs = textCross(l.font, str, sz, { embolden: pl.embolden || 0, spacing: l.spacing || 0, maxWidth: usableW, align: pl.textAlign || 'center' });
+      if (cs && l.italic) cs = cs.transform([1, 0, 0, Math.tan((clamp(l.italic, 0, 25) * Math.PI) / 180), 1, 0, 0, 0, 1]);
       const cy = y - sz / 2;
       y -= sz + gapK * (sizes.reduce((a, b) => a + b, 0) / sizes.length) * k;
       if (!cs) return;
@@ -127,7 +179,18 @@ export function buildPlaque(pl, o = {}) {
       const k2 = Math.min(1, usableW / Math.max(bb.max[0] - bb.min[0], 1e-6), usableH / Math.max(bb.max[1] - bb.min[1], 1e-6));
       if (k2 < 0.999) all = all.scale([k2, k2]);
       const b2 = all.bounds();
-      all = all.translate([-(b2.min[0] + b2.max[0]) / 2, -(b2.min[1] + b2.max[1]) / 2]);
+      const ax = pl.textAlign === 'left' ? -usableW / 2 - b2.min[0] : pl.textAlign === 'right' ? usableW / 2 - b2.max[0] : -(b2.min[0] + b2.max[0]) / 2;
+      all = all.translate([ax, -(b2.min[1] + b2.max[1]) / 2]);
+      if (ax !== -(b2.min[0] + b2.max[0]) / 2) {
+        // side-aligned text must stay inside the plate's safe area (shaped outlines narrow towards the edges):
+        // otherwise slide the block back to the middle, shrinking it slightly if it still does not fit
+        const safe = outline.offset(-innerInset, 'Miter', 2);
+        if (!all.subtract(safe).isEmpty()) {
+          const b3 = all.bounds();
+          all = all.translate([-(b3.min[0] + b3.max[0]) / 2, 0]);
+          for (let i = 0; i < 12 && !all.subtract(safe).isEmpty(); i++) all = all.scale([0.95, 0.95]);
+        }
+      }
       if (pl.textMode === 'engrave') {
         const cut = Manifold.extrude(all, depth + 1, 0, 0, 1).translate([0, 0, t - depth]);
         const base = union(parts);
